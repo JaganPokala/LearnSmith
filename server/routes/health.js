@@ -21,33 +21,9 @@
 
 import { Router } from 'express';
 import { config, features } from '../config/env.js';
+import { getDatabaseState } from '../config/db.js';
 
 const router = Router();
-
-/**
- * Describe the database connection in words, not booleans.
- *
- * Why a function and not an inline ternary: Task 2.1 replaces the body of this
- * with mongoose's real connection state, and having one named place to change
- * is the difference between a two-line edit and a hunt.
- *
- * Why three states rather than up/down: "no MONGO_URI configured" and
- * "configured but unreachable" look identical in a boolean and have completely
- * different fixes — one is a missing env var, the other is Atlas or the network.
- * Collapsing them now means re-deriving the distinction later, in production,
- * under time pressure.
- *
- * @returns {'not configured' | 'down' | 'up'}
- */
-function describeDatabase() {
-  // Derived from `features`, never a second read of process.env - env.js owns
-  // that, and a second read is a second thing that can drift.
-  if (!features.database) return 'not configured';
-
-  // Configured, but mongoose is not wired until Phase 2. "We have not connected
-  // yet" is the honest answer; Task 2.1 replaces this with the real state.
-  return 'down';
-}
 
 /**
  * GET /api/health
@@ -69,7 +45,9 @@ router.get('/', (req, res) => {
     uptime: Math.round(process.uptime()),
 
     env: config.NODE_ENV,
-    db: describeDatabase(),
+    // db.js owns connection state; asking it keeps this route from
+    // importing mongoose or duplicating the readyState mapping.
+    db: getDatabaseState(),
 
     // `features` only - no describeConfig(). This route is public, and model
     // ids and origins do not need publishing to anyone who curls it.

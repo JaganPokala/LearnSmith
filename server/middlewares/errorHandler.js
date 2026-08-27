@@ -82,6 +82,31 @@ export function notFound(req, res, next) {
 }
 
 /**
+ * Convert third-party error shapes into ApiError.
+ *
+ * Kept separate from errorHandler so the list of "libraries whose errors we
+ * understand" is one readable block rather than branches inside the handler.
+ *
+ * @param {Error} err
+ * @returns {Error} an ApiError if we recognised it, otherwise the original
+ */
+function translateKnownErrors(err) {
+  // Mongoose: id in the URL is not a valid ObjectId.
+  if (err.name === 'CastError') {
+    return new ApiError(400, 'invalid_id', `"${err.value}" is not a valid id`);
+  }
+
+  // Mongoose: schema validation failed on save. err.errors is keyed by field,
+  // so the message can name exactly which ones — far more useful than "invalid".
+  if (err.name === 'ValidationError') {
+    const fields = Object.keys(err.errors ?? {}).join(', ');
+    return new ApiError(400, 'validation_failed', `Invalid or missing: ${fields}`);
+  }
+
+  return err;
+}
+
+/**
  * The last middleware in the chain. Converts anything thrown anywhere into the
  * single JSON shape above.
  *
@@ -102,6 +127,21 @@ export function errorHandler(err, req, res, next) {
   //    res.json() here throws a second error on top of the first.
 
   if (res.headersSent) return next(err);
+
+  // 1b. Translate errors thrown by libraries that know nothing about our
+  //     envelope. Mongoose is the one that matters here: both of these arrive
+  //     with no statusCode, no status and no code, so without this they fall
+  //     through to 500 — telling the client "our server crashed" when in fact
+  //     they sent bad input.
+  //
+  //       CastError       — "/api/courses/not-an-id". A malformed id is the
+  //                         client's typo. NOT a 404: "no such course" and
+  //                         "that is not an id" are different answers.
+  //       ValidationError — a required field missing on save.
+  //
+  //     Marked operational because their messages are safe to show and
+  //     genuinely useful — they name the offending field.
+  err = translateKnownErrors(err);
 
   // 2. Work out the status code. Three sources, in priority order:
   //      err.statusCode  - our ApiError

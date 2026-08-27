@@ -26,6 +26,7 @@ import { config, features, describeConfig } from './config/env.js';
 
 import healthRouter from './routes/health.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
+import { connectDB, disconnectDB } from './config/db.js';
 
 const app = express();
 
@@ -131,6 +132,14 @@ app.use(errorHandler);
 // next to the feature flags is what makes a wrong value obvious rather than
 // puzzling.
 
+// Deliberately NOT awaited. Awaiting would block boot for up to
+// serverSelectionTimeoutMS, and on Render a slow boot can miss the health-check
+// window and fail the deploy. Not awaiting also makes the 'connecting' state in
+// getDatabaseState() observable instead of theoretical: /api/health can be hit
+// while the handshake is still in flight. connectDB never throws, so a floating
+// promise here cannot produce an unhandled rejection.
+connectDB();
+
 const server = app.listen(config.PORT, () => {
   console.log(`\n  text-to-learn-api listening on http://localhost:${config.PORT}`);
   console.log(`  NODE_ENV  : ${config.NODE_ENV}`);
@@ -170,7 +179,9 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
 
     // close() is not a kill: it stops the listener and lets open requests run
     // to completion, then fires this callback.
-    server.close(() => {
+    server.close(async () => {
+      // After close(), so in-flight requests still have their database.
+      await disconnectDB();
       console.log('Closed cleanly.');
       process.exit(0);
     });

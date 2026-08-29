@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* The design system, in one block.
+   The --color- and --font- PREFIXES are what make Tailwind generate utilities:
+   --color-ink  ->  bg-ink / text-ink / border-ink
+   --font-mono  ->  font-mono
+   Rename the prefix and the utility silently stops existing. */
+@theme {
+  --color-ink: #101418;         /* dark rail, code blocks */
+  --color-accent: #0e7490;      /* borders, active states, buttons */
+  --color-glow: #22d3ee;        /* hero headline, selected items */
+  --color-surface: #f6f7f9;     /* app background */
+  --color-line: #dfe3e8;        /* hairline borders */
+  --color-chip-built: #7dd3c0;  /* the "built" chip */
+
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Base styles, so every page does not have to repeat bg-surface font-sans.
+   Theme tokens are real CSS variables, so var() works directly. */
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

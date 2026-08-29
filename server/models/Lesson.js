@@ -77,6 +77,28 @@ const lessonSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
+    // DENORMALISED. The course is already reachable as module -> course, so this
+    // is the same fact stored twice - normally a smell, because two copies can
+    // disagree.
+    //
+    // It is safe here for one specific reason: A LESSON NEVER MOVES. The
+    // relationship is fixed when the tree is written and immutable for the
+    // document's life, so the copies cannot drift.
+    //
+    // What it buys, all of which were multi-step before:
+    //   - "how many lessons does this course have?"  -> one indexed query
+    //     instead of Course -> Modules -> Lessons
+    //   - the ownership check in lessonController    -> one query instead of a
+    //     two-hop walk up the tree
+    //   - cascade delete                             -> delete by course
+    //     directly, which also catches lessons whose module was orphaned
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course',
+      required: true,
+      index: true,
+    },
   },
   {
     // updatedAt doubles as "when was this content generated".

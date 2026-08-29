@@ -96,6 +96,31 @@ function translateKnownErrors(err) {
     return new ApiError(400, 'invalid_id', `"${err.value}" is not a valid id`);
   }
 
+  // Mongoose/driver: the database is unreachable.
+  //
+  // These arrive with no statusCode, no status and no code, so without this they
+  // fall through to 500 - telling the client "our code broke" when in fact a
+  // dependency is down. Same reasoning as the 502 used for OpenAI failures
+  // (D13): 500 means us, 5xx-other means something we depend on.
+  //
+  // The names are unintuitive. The one you actually hit is the plain
+  // `MongooseError` produced by command buffering: with no connection, mongoose
+  // QUEUES the operation hoping one appears, then gives up after 10s with
+  // "Operation `courses.insertOne()` buffering timed out after 10000ms". Nothing
+  // in that error says "disconnected".
+  if (
+    err.name === 'MongooseError' ||
+    err.name === 'MongoNetworkError' ||
+    err.name === 'MongoServerSelectionError' ||
+    /buffering timed out/i.test(err.message ?? '')
+  ) {
+    return new ApiError(
+      503,
+      'database_unavailable',
+      'The database is unavailable right now. Nothing was saved - try again in a moment.'
+    );
+  }
+
   // Mongoose: schema validation failed on save. err.errors is keyed by field,
   // so the message can name exactly which ones — far more useful than "invalid".
   if (err.name === 'ValidationError') {

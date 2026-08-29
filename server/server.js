@@ -25,6 +25,8 @@ import morgan from 'morgan';
 import { config, features, describeConfig } from './config/env.js';
 
 import healthRouter from './routes/health.js';
+import coursesRouter from './routes/courses.js';
+import lessonsRouter from './routes/lessons.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
 import { connectDB, disconnectDB } from './config/db.js';
 
@@ -111,6 +113,8 @@ app.get('/', (req, res) => {
 // Mounted here, so the path inside routes/health.js is '/' — the mount path and
 // the route path concatenate. '/health' in there would give /api/health/health.
 app.use('/api/health', healthRouter);
+app.use('/api/courses', coursesRouter);
+app.use('/api/lessons', lessonsRouter);
 
 // notFound runs after every real route, or it would swallow them.
 // errorHandler is registered LAST: it only catches errors from middleware above it.

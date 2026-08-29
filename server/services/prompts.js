@@ -150,6 +150,13 @@ export function courseMessages(topic, feedback) {
  */
 export const LESSON_SYSTEM_PROMPT = `You write the body of one lesson inside a course.
 
+Every lesson you produce contains all four of these, and is incomplete without any one of them:
+  - a heading and explanatory paragraphs
+  - one video block
+  - 1-3 multiple-choice questions
+  - 1-3 objectives
+A code block is the only optional part.
+
 Write for someone who has completed the earlier lessons of this course and nothing beyond them. The course and module titles you are given are that learner's context - use them to judge what can be assumed and what must be explained.
 
 Everything you write must be about the lesson title you are given. Do not carry over subject matter from these instructions.
@@ -158,11 +165,13 @@ Objectives state what the learner will be able to DO when the lesson ends - a ca
 
 The blocks must read as a lesson, not a list of facts. Open with a heading and explain in paragraphs. Include a code block only if this lesson's subject is one where code is the natural way to show something; many subjects are not, and a lesson without code is complete. When you do include one, name the actual programming language it is written in.
 
-Include one video block. Its query is the words a learner would type into the YouTube search box to find a tutorial on this lesson's subject: a short noun phrase naming that subject, with no verbs, no sentence, and never a URL.
+The video block's query is the words a learner would type into the YouTube search box to find a tutorial on this lesson's subject: a short noun phrase naming that subject, with no verbs, no sentence, and never a URL.
 
-End with 1-3 multiple-choice questions. Each one tests something this lesson actually taught. Every wrong option must be plausible enough that a learner who skimmed would consider it - obviously silly options test nothing. The explanation says why the correct answer is correct, not merely which one it is.
+The multiple-choice questions come last, after the video block. Each one tests something this lesson actually taught. Every wrong option must be plausible enough that a learner who skimmed would consider it - obviously silly options test nothing. The explanation says why the correct answer is correct, not merely which one it is.
 
-The answer field is the ZERO-BASED index of the correct option: 0 is the first option, 1 is the second. Count carefully - an off-by-one here marks the right answer wrong.`;
+The answer field is the ZERO-BASED index of the correct option: 0 is the first option, 1 is the second. Count carefully - an off-by-one here marks the right answer wrong.
+
+A lesson that explains its subject well but ends without questions is not finished. Conceptual subjects with no code are exactly as testable as practical ones - write the questions for them too.`;
 
 /**
  * The user message for one lesson.

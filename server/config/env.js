@@ -35,6 +35,8 @@ if (envFileLoaded) {
 const SPEC = [
   { key: 'NODE_ENV', fallback: 'development' },
   { key: 'PORT', fallback: '5000', number: true },
+  // Comma-separated allowlist, not one origin — Vercel gives every push and
+  // every PR its own preview domain. See parseOrigins below.
   { key: 'CLIENT_ORIGIN', fallback: 'http://localhost:5173' },
 
   { key: 'OPENAI_API_KEY', required: true, secret: true },
@@ -154,9 +156,49 @@ if (warnings.length > 0) {
   console.warn('');
 }
 
+/**
+ * Turn the CLIENT_ORIGIN string into matchers.
+ *
+ * Entries are comma-separated exact origins. One `*` is allowed inside an entry
+ * for Vercel previews:
+ *
+ *   https://learn-smith.vercel.app,https://learn-smith-*.vercel.app
+ *
+ * Keep a real prefix in front of the `*`. `https://*.vercel.app` would let ANY
+ * site deployed to vercel.app call this API from a visitor's browser.
+ *
+ * @param {string} raw
+ * @returns {Array<{ source: string, test: (origin: string) => boolean }>}
+ */
+function parseOrigins(raw) {
+  return String(raw ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    // A pasted URL often carries a trailing slash. The browser's Origin header
+    // never does, so "https://x.vercel.app/" would match nothing, ever.
+    .map((entry) => entry.replace(/\/+$/, ''))
+    .filter(Boolean)
+    .map((source) => {
+      if (!source.includes('*')) {
+        return { source, test: (origin) => origin === source };
+      }
+
+      // Escape everything, then turn the escaped \* back into a wildcard, so a
+      // dot in the host stays a literal dot rather than matching any character.
+      const pattern = new RegExp(
+        `^${source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '[^/]*')}$`
+      );
+
+      return { source, test: (origin) => pattern.test(origin) };
+    });
+}
+
 /** Frozen so a stray assignment cannot reconfigure the app at runtime. */
 export const config = Object.freeze({
   ...values,
+
+  // Derived from CLIENT_ORIGIN, never a second variable to keep in sync.
+  CLIENT_ORIGINS: parseOrigins(values.CLIENT_ORIGIN),
 
   isProduction: values.NODE_ENV === 'production',
 

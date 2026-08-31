@@ -9,6 +9,17 @@ import LibraryPage from './pages/Library.jsx';
 import CoursePage from './pages/Course.jsx';
 import LessonPage from './pages/Lesson.jsx';
 import NotFoundPage from './pages/NotFound.jsx';
+import { api } from './lib/api.js';
+
+// Render's free tier spins the API down after ~15 minutes idle, and the next
+// request pays the cold start. Firing this at module load — before React even
+// mounts — means the instance wakes while the user is reading the landing page
+// or typing a topic, instead of while they watch a spinner.
+//
+// Fire and forget, and the .catch is not optional: an unhandled rejection in
+// the console looks like a bug, and a failure here means nothing on its own.
+// The real request is what reports a genuinely unreachable server.
+api.get('/api/health').catch(() => {});
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

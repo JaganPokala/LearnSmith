@@ -15,7 +15,7 @@ import healthRouter from './routes/health.js';
 import coursesRouter from './routes/courses.js';
 import lessonsRouter from './routes/lessons.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
-import { requestTrace } from './middlewares/trace.js';
+import { requestTrace, traceError } from './middlewares/trace.js';
 import { connectDB, disconnectDB } from './config/db.js';
 
 const app = express();
@@ -26,11 +26,38 @@ if (config.isProduction) {
   app.set('trust proxy', 1);
 }
 
-// One exact origin, never '*' — a wildcard lets any site call this API from a
-// visitor's browser, and browsers reject wildcard + credentials anyway.
+// FIRST, so a CORS refusal below is logged inside a request's trace rather than
+// as an orphaned line.
+app.use(requestTrace);
+
+// An allowlist, never '*' — a wildcard lets any site on the internet call this
+// API from a visitor's browser.
+//
+// A function rather than an array so a refusal can be LOGGED. This is the whole
+// point: a rejected origin is invisible to the client, which sees fetch reject
+// with no status and reports "cannot reach the server" while the server's own
+// logs show a clean 200. Without this line the one place that knows the real
+// reason stays silent too.
 app.use(
   cors({
-    origin: config.CLIENT_ORIGIN,
+    origin(origin, callback) {
+      // No Origin header: curl, Render's health check, server-to-server. Not a
+      // browser request, so there is no cross-origin read to protect against.
+      if (!origin) return callback(null, true);
+
+      if (config.CLIENT_ORIGINS.some((allowed) => allowed.test(origin))) {
+        return callback(null, true);
+      }
+
+      traceError(
+        `cors: refused origin ${origin} (allowed: ${config.CLIENT_ORIGINS.map((a) => a.source).join(', ') || 'none'})`
+      );
+
+      // false, not an Error. false omits the CORS headers and lets the request
+      // proceed — the browser blocks the response. An Error would surface as a
+      // 500, which blames our code for the caller's origin.
+      return callback(null, false);
+    },
   })
 );
 
@@ -38,10 +65,6 @@ app.use(
 // prompt is ~40 bytes, so 10kb is generous and stops a junk POST allocating
 // whatever the sender feels like.
 app.use(express.json({ limit: '10kb' }));
-
-// Before the routes, so every line any layer logs during a request is already
-// inside its AsyncLocalStorage context.
-app.use(requestTrace);
 
 // Redundant in development — requestTrace's "<--" line carries everything
 // morgan 'dev' printed, plus a request id. 'combined' stays for production

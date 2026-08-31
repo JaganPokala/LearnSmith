@@ -1,22 +1,10 @@
 /**
- * server/middlewares/requireDatabase.js
- *
  * Refuses a request early when the database is unreachable, so nothing
- * expensive happens on a request that cannot possibly be saved.
+ * expensive happens on a request that could never be saved.
  *
- * WHAT THIS FIXES, measured:
- *   With Atlas unreachable, POST /api/courses/generate took 15.7s to fail:
- *     ~5.0s  OpenAI generated a course (real money, nowhere to put it)
- *     10.0s  mongoose buffered the insert, waiting for a connection
- *      0.7s  everything else
- *   ...and returned 500, blaming our own code for a dependency being down.
- *
- *   With this middleware the same request fails in ~0ms with 503 and makes no
- *   API call at all.
- *
- * WHY MIDDLEWARE RATHER THAN A LINE IN THE CONTROLLER:
- * four routes need it (generate, list, get one, generate lesson). A check
- * copied into four controllers drifts; one applied to a router does not.
+ * Measured with Atlas down: POST /api/courses/generate took 15.7s and returned
+ * 500 (5.0s OpenAI + 10.0s mongoose buffering). With this: 503 in ~0ms, no API
+ * call. On the router rather than in four controllers, so it cannot drift.
  */
 
 import { getDatabaseState } from '../config/db.js';
@@ -32,30 +20,18 @@ import { ApiError } from './errorHandler.js';
 export function requireDatabase(req, res, next) {
   const state = getDatabaseState();
 
-  // 'connecting' PASSES ON PURPOSE — and this is the interesting decision.
-  //
-  // D8 established that connectDB() is not awaited, so for roughly 250ms after
-  // boot the server is listening while the handshake is still in flight. During
-  // that window mongoose BUFFERS operations: a request arriving at t+100ms is
-  // queued and completes normally at t+500ms.
-  //
-  // Rejecting 'connecting' would break that working case in order to improve a
-  // broken one. Buffering is the right behaviour for a connection that is
-  // coming; it is only pathological when the connection is never coming, and
-  // that is exactly the case below.
+  // 'connecting' PASSES ON PURPOSE. connectDB() is not awaited, so for ~500ms
+  // after boot the server listens while the handshake is in flight — and
+  // mongoose buffers operations, so those requests complete normally.
+  // Buffering is only pathological when the connection is never coming.
   if (state === 'up' || state === 'connecting') return next();
 
-  // 'down'            - configured but unreachable (Atlas, network, credentials)
-  // 'not configured'  - no MONGO_URI at all
-  //
-  // Different causes, different fixes, so they get different messages. The
-  // three-state distinction from Task 2.1 pays for itself here.
+  // Different causes, different fixes, so different messages.
   const message =
     state === 'not configured'
       ? 'This server has no database configured, so courses cannot be saved or listed.'
       : 'The database is unavailable right now. Nothing was saved - try again in a moment.';
 
-  // 503, not 500: our code is fine, a dependency is not. Same reasoning as the
-  // 502 used for OpenAI failures (D13).
+  // 503, not 500: our code is fine, a dependency is not.
   next(new ApiError(503, 'database_unavailable', message));
 }

@@ -1,39 +1,16 @@
 /**
- * server/middlewares/errorHandler.js
+ * One shape for every failure: { error: { code, message } }.
  *
- * One shape for every failure this API can produce:
- *
- *   { "error": { "code": "not_found", "message": "No route for GET /nope" } }
- *
- * Why it matters more than it looks: the React client will call
- * `response.json()` on failures too. Express's DEFAULT handler returns an HTML
- * page — so today a 404 makes the frontend throw a JSON parse error, and the
- * user sees a crash instead of "course not found". Every backend failure
- * becomes a confusing frontend bug.
- *
- * The default handler also prints a full stack trace including absolute file
- * paths, which publishes your directory layout to anyone who sends a bad
- * request.
- *
- * Exports three things:
- *   ApiError    - for routes to throw deliberately, with a status code
- *   notFound    - catches anything no route matched
- *   errorHandler- the last middleware in the chain
+ * Express's default handler returns an HTML page, so without this a 404 makes
+ * the React client throw a JSON parse error instead of showing a message.
  */
 
 import { config } from '../config/env.js';
+import { traceError } from './trace.js';
 
 /**
- * An error a route raises on purpose, carrying an HTTP status and a stable
- * machine-readable code.
- *
- * Why a class rather than `res.status(404).json(...)` inside each route:
- * throwing lets you exit from anywhere, including deep inside a service, without
- * that service needing to know what `res` is. Phase 3's generator will throw
- * these from files that have never heard of Express.
- *
- * `code` is for the client to branch on ('course_not_found'); `message` is for a
- * human to read. Keep them separate — message wording will change, code must not.
+ * An error a route raises on purpose. Throwing lets a service exit from
+ * anywhere without knowing what `res` is.
  */
 export class ApiError extends Error {
   /**
@@ -42,72 +19,54 @@ export class ApiError extends Error {
    * @param {string} message     human-readable explanation
    */
   constructor(statusCode, code, message) {
-    // 1. Call super(message) so Error's own machinery works.
-    // 2. Store statusCode and code on the instance.
-    // 3. Set this.name to 'ApiError'.
-    // 4. Set this.isOperational = true.
-    //    This flags "an error we anticipated and described" as opposed to a
-    //    genuine bug (a TypeError from our own broken code). errorHandler uses
-    //    it to decide whether the message is safe to show a stranger.
-
     super(message);
 
     this.statusCode = statusCode;
     this.code = code;
     this.name = 'ApiError';
+
+    // "Anticipated and described", as opposed to a genuine bug. errorHandler
+    // uses it to decide whether the message is safe to show a stranger.
     this.isOperational = true;
   }
 }
 
 /**
- * Runs when no route matched. Registered AFTER all routes, BEFORE errorHandler.
- *
- * Note it is a normal 3-argument middleware, not an error handler: nothing has
- * gone wrong yet, we have simply run out of routes.
+ * Runs when no route matched. Registered after all routes, before errorHandler.
+ * A normal 3-arg middleware — nothing has gone wrong, we ran out of routes.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
 export function notFound(req, res, next) {
-  // 1. Build an ApiError: 404, code 'not_found', message naming the METHOD and
-  //    the URL. Naming both matters — hitting POST on a GET-only route is a
-  //    404 that looks identical to a typo'd path until the message says which.
-  // 2. Pass it to next(). Calling next(err) with an argument skips every
-  //    remaining normal middleware and jumps straight to the error handler.
-
+  // Naming the METHOD as well as the URL: POST to a GET-only route is a 404
+  // that looks identical to a typo'd path until the message says which.
   const err = new ApiError(404, 'not_found', `No route for ${req.method} ${req.originalUrl}`);
 
   next(err);
 }
 
 /**
- * Convert third-party error shapes into ApiError.
- *
- * Kept separate from errorHandler so the list of "libraries whose errors we
- * understand" is one readable block rather than branches inside the handler.
+ * Convert third-party error shapes into ApiError. Separate from errorHandler so
+ * the list of recognised libraries is one readable block.
  *
  * @param {Error} err
- * @returns {Error} an ApiError if we recognised it, otherwise the original
+ * @returns {Error} an ApiError if recognised, otherwise the original
  */
 function translateKnownErrors(err) {
-  // Mongoose: id in the URL is not a valid ObjectId.
+  // Mongoose: the id in the URL is not a valid ObjectId. 400, not 404 — "no
+  // such course" and "that is not an id" are different answers.
   if (err.name === 'CastError') {
     return new ApiError(400, 'invalid_id', `"${err.value}" is not a valid id`);
   }
 
-  // Mongoose/driver: the database is unreachable.
+  // Database unreachable. These arrive with no statusCode and no code, so
+  // without this they fall through to 500 — blaming our code for a dependency.
   //
-  // These arrive with no statusCode, no status and no code, so without this they
-  // fall through to 500 - telling the client "our code broke" when in fact a
-  // dependency is down. Same reasoning as the 502 used for OpenAI failures
-  // (D13): 500 means us, 5xx-other means something we depend on.
-  //
-  // The names are unintuitive. The one you actually hit is the plain
-  // `MongooseError` produced by command buffering: with no connection, mongoose
-  // QUEUES the operation hoping one appears, then gives up after 10s with
-  // "Operation `courses.insertOne()` buffering timed out after 10000ms". Nothing
-  // in that error says "disconnected".
+  // The name is unintuitive: the one you actually hit is a plain MongooseError
+  // from command buffering, "Operation `courses.insertOne()` buffering timed
+  // out after 10000ms". Nothing in it says "disconnected".
   if (
     err.name === 'MongooseError' ||
     err.name === 'MongoNetworkError' ||
@@ -121,8 +80,7 @@ function translateKnownErrors(err) {
     );
   }
 
-  // Mongoose: schema validation failed on save. err.errors is keyed by field,
-  // so the message can name exactly which ones — far more useful than "invalid".
+  // err.errors is keyed by field, so the message can name exactly which ones.
   if (err.name === 'ValidationError') {
     const fields = Object.keys(err.errors ?? {}).join(', ');
     return new ApiError(400, 'validation_failed', `Invalid or missing: ${fields}`);
@@ -132,13 +90,11 @@ function translateKnownErrors(err) {
 }
 
 /**
- * The last middleware in the chain. Converts anything thrown anywhere into the
- * single JSON shape above.
+ * The last middleware in the chain.
  *
- * MUST take exactly four parameters. Express identifies error handlers by
- * `fn.length === 4` — if you delete the unused `next` and Express silently treats this
- * as a normal middleware, it never runs on errors, and you get HTML pages back
- * with no clue why. Do not let a linter "helpfully" remove it.
+ * MUST take exactly four parameters — Express identifies error handlers by
+ * fn.length === 4. Delete the unused `next` and this silently becomes a normal
+ * middleware that never runs on errors. Do not let a linter remove it.
  *
  * @param {Error} err
  * @param {import('express').Request} req
@@ -146,41 +102,15 @@ function translateKnownErrors(err) {
  * @param {import('express').NextFunction} next
  */
 export function errorHandler(err, req, res, next) {
-  // 1. If res.headersSent, the response already started streaming and you
-  //    cannot change the status or body. Hand off to Express's built-in
-  //    handler with next(err), which will close the connection. Trying to
-  //    res.json() here throws a second error on top of the first.
-
+  // The response already started streaming; res.json() here throws a second
+  // error on top of the first.
   if (res.headersSent) return next(err);
 
-  // 1b. Translate errors thrown by libraries that know nothing about our
-  //     envelope. Mongoose is the one that matters here: both of these arrive
-  //     with no statusCode, no status and no code, so without this they fall
-  //     through to 500 — telling the client "our server crashed" when in fact
-  //     they sent bad input.
-  //
-  //       CastError       — "/api/courses/not-an-id". A malformed id is the
-  //                         client's typo. NOT a 404: "no such course" and
-  //                         "that is not an id" are different answers.
-  //       ValidationError — a required field missing on save.
-  //
-  //     Marked operational because their messages are safe to show and
-  //     genuinely useful — they name the offending field.
   err = translateKnownErrors(err);
 
-  // 2. Work out the status code. Three sources, in priority order:
-  //      err.statusCode  - our ApiError
-  //      err.status      - what body-parser and several other libraries use
-  //      500             - anything else
-  //    Both names exist in the wild; checking only one is why "why is my 400
-  //    coming back as 500" happens. The malformed-JSON case sets err.status.
-
+  // Both names exist in the wild — body-parser sets err.status, and checking
+  // only one is why "my 400 comes back as 500" happens.
   const status = err.statusCode ?? err.status ?? 500;
-
-  // 3. Work out the machine code:
-  //      err.code if we set one,
-  //      otherwise derive something sensible from the status
-  //      (400 -> 'bad_request', 404 -> 'not_found', 500 -> 'internal_error').
 
   const CODE_FOR_STATUS = {
     400: 'bad_request',
@@ -193,29 +123,20 @@ export function errorHandler(err, req, res, next) {
 
   const code = err.code ?? CODE_FOR_STATUS[status] ?? 'error';
 
-  // 4. Decide what MESSAGE is safe to send.
-  //    - err.isOperational (our ApiError): the message was written for a user,
-  //      send it as-is.
-  //    - anything else is an unplanned crash. Its message may contain a file
-  //      path, a query, or part of a connection string. In production send a
-  //      generic line; in development send the real one, because you are the
-  //      only one reading it.
-
+  // An unplanned crash's message may contain a file path or part of a
+  // connection string. In development you are the only one reading it.
   const safeToShow = err.isOperational === true || !config.isProduction;
   const message = safeToShow ? err.message : 'Something went wrong on our end.';
 
-  // 5. LOG the real error server-side, always, including the stack — separate
-  //    from what you send. The whole point of step 4 is that the client sees
-  //    less than you do; if you also log less, the information is simply gone.
-  //    Include req.method and req.originalUrl so a 500 in a log is traceable to
-  //    a request.
+  // No leading newline — trace() prefixes the request id, and a newline pushes
+  // the text onto a line where nothing identifies which request it belongs to.
+  traceError(`error: ${status} ${code} - ${err.message}`);
 
-  console.error(`\n[error] ${req.method} ${req.originalUrl} -> ${status} ${code}`);
-  console.error(err.stack ?? err);
-
-  // 6. Send res.status(status).json({ error: { code, message } }).
-  //    In development only, also attach err.stack — it makes curl debugging far
-  //    faster, and config.isProduction is what keeps it out of the deploy.
+  // The stack only when it tells you something: ten frames of Express router
+  // internals under every deliberate 400 buries the lines that matter.
+  if (!err.isOperational) {
+    traceError(err.stack ?? err);
+  }
 
   const body = { error: { code, message } };
 

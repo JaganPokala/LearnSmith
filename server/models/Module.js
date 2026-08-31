@@ -1,13 +1,6 @@
 /**
- * server/models/Module.js
- *
- * The middle of the tree. A section of a course, holding an ordered list of
- * Lesson ids.
- *
- * Note this file has no `creator`. Ownership lives on the Course, and a Module
- * is reachable only through one. Duplicating `creator` here would be a second
- * copy of the same fact that can disagree with the first — the ownership check
- * in Phase 8 walks up to the Course instead.
+ * The middle of the tree: a section of a course holding an ordered list of
+ * Lesson ids. No `creator` — ownership lives on the Course, stored once.
  */
 
 import mongoose from 'mongoose';
@@ -20,11 +13,8 @@ const moduleSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Required on purpose: a module with no course is an orphan that no query
-    // will ever reach and nothing will ever clean up.
-    //
-    // Indexed because Task 2.3's cascade delete queries modules BY course, and
-    // so does any path that loads a course's modules starting from here.
+    // Required: a module with no course is an orphan nothing will ever reach.
+    // Indexed because the cascade delete queries modules BY course.
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',

@@ -18,3 +18,5 @@ Thumbs.db
 .idea/
 *.md
 
+# The source brief. Kept locally, not in the repo.
+Hackathon Roadmap.docx

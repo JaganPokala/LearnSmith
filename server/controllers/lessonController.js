@@ -13,8 +13,11 @@ import { generateLesson } from '../services/lessonGenerator.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
 
-/** Placeholder until Phase 8 replaces it with req.auth.payload.sub. */
-const DEV_CREATOR = 'dev-user';
+/**
+ * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
+ * where it becomes req.auth.payload.sub. One library, shared by every visitor.
+ */
+const GUEST_CREATOR = 'guest-user';
 
 /**
  * POST /api/lessons/:id/generate
@@ -37,7 +40,7 @@ export async function generateLessonContent(req, res) {
   // of walking module -> course. The module is needed only for its title, which
   // is context for the generator, so both run in parallel.
   const [course, module] = await Promise.all([
-    Course.findOne({ _id: lesson.course, creator: DEV_CREATOR }),
+    Course.findOne({ _id: lesson.course, creator: GUEST_CREATOR }),
     Module.findById(lesson.module),
   ]);
 
@@ -107,7 +110,7 @@ export async function getLesson(req, res) {
   // LESSON ORDER — Lesson.find({ module }) returns them in whatever order the
   // database felt like, and the rail would silently scramble.
   const [course, module] = await Promise.all([
-    Course.findOne({ _id: lesson.course, creator: DEV_CREATOR }).select('title'),
+    Course.findOne({ _id: lesson.course, creator: GUEST_CREATOR }).select('title'),
     Module.findById(lesson.module)
       .select('title lessons')
       .populate({ path: 'lessons', select: 'title isEnriched' }),

@@ -9,7 +9,7 @@
  * @param {object} props.block
  */
 export default function CodeBlock({ block }) {
-  // 1. A <pre><code> inside a bordered box, dark like the rail (bg-ink) so it
+  // 1. A <pre><code> inside a bordered box, raised off the page so it
   //    reads as a different kind of content from the prose around it.
   //
   // 3. The language label, small and mono, above the code. It comes straight
@@ -27,9 +27,9 @@ export default function CodeBlock({ block }) {
     typeof block.language === 'string' ? block.language.trim().toLowerCase().slice(0, 20) : '';
 
   return (
-    <div className="my-[14px] border-l-2 border-l-accent bg-ink px-[14px] py-[12px]">
+    <div className="my-[14px] border-l-2 border-l-accent bg-raised px-[14px] py-[12px]">
       {language && (
-        <span className="mb-[7px] block font-mono text-[8.5px] uppercase tracking-[0.13em] text-[#5c6773]">
+        <span className="mb-[7px] block font-mono text-xs uppercase tracking-[0.13em] text-mute">
           {language}
         </span>
       )}
@@ -44,7 +44,7 @@ export default function CodeBlock({ block }) {
              Paired with whitespace-pre so lines do NOT wrap. Wrapped code is
              code with invented line breaks, which for Python is actively
              wrong. */}
-      <pre className="m-0 overflow-x-auto whitespace-pre font-mono text-[11px] leading-[1.65] text-[#cfd8e3]">
+      <pre className="m-0 overflow-x-auto whitespace-pre font-mono text-sm leading-[1.65] text-body">
         <code>{block.text}</code>
       </pre>
     </div>

@@ -1,7 +1,7 @@
 import LessonRow from './LessonRow.jsx';
 
 /**
- * One module: a heading, then its lessons.
+ * One module: a header, then its lessons, inside one bordered panel.
  *
  * @param {object} props
  * @param {number} props.number       1-based module position
@@ -9,32 +9,38 @@ import LessonRow from './LessonRow.jsx';
  * @param {number} props.startNumber  the course-wide number of its FIRST lesson
  */
 export default function ModuleSection({ number, module, startNumber }) {
-  // 1. Heading in the design's form: "1 · Foundations of React Hooks"
-  //    — the module number, a middle dot, the title. ~15px semibold.
-  //
-  // 2. Then one <LessonRow> per lesson.
-  //
-  //    THE NUMBERING IS COURSE-WIDE, NOT PER-MODULE. Module 1 ends at 05 and
-  //    module 2 starts at 06. So the row number is startNumber + i, never i + 1.
-  //
-  //    Three modules each restarting at 01 reads as three separate lists rather
-  //    than one syllabus — obviously wrong once you see it, easy to write by
-  //    accident.
-  //
-  // 3. A module with an empty lessons array should render its heading and
-  //    nothing else, not crash. It is a real state: a generation whose tree
-  //    half-saved.
+  const lessons = module.lessons ?? [];
+
+  const written = lessons.filter((lesson) => lesson.isEnriched).length;
 
   return (
-    <section className="mt-[22px] first:mt-0">
-      <h2 className="mb-[9px] text-[15px] font-semibold tracking-[-0.01em]">
-        {number} · {module.title}
-      </h2>
+    <section className="mt-4 border border-line first:mt-0">
+      <header className="flex items-baseline gap-3 border-b border-line bg-panel px-[13px] py-[10px]">
+        <span className="shrink-0 font-mono text-meta tabular-nums text-glow">
+          {String(number).padStart(2, '0')}
+        </span>
 
-      {/* Optional chain, not `.map` directly: `lessons` is absent on a module
-          whose tree half-saved, and a heading with nothing under it is the
-          honest render of that. */}
-      {module.lessons?.map((lesson, i) => (
+        <h2 className="min-w-0 flex-1 text-lg font-semibold tracking-[-0.01em] text-ink">
+          {module.title}
+        </h2>
+
+        {/* Per module, not just per course: it is the answer to "where did I get
+            to", and the course-wide total cannot give it. */}
+        {lessons.length > 0 && (
+          <span className="shrink-0 font-mono text-xs tabular-nums text-mute">
+            {written}/{lessons.length}
+          </span>
+        )}
+      </header>
+
+      {/* The numbering is COURSE-WIDE: module 1 ends at 05 and module 2 starts
+          at 06, so the row number is startNumber + i, never i + 1. Three modules
+          each restarting at 01 reads as three separate lists, not one syllabus.
+
+          Optional chain, not `.map` directly: `lessons` is absent on a module
+          whose tree half-saved, and a header with nothing under it is the honest
+          render of that. */}
+      {lessons.map((lesson, i) => (
         <LessonRow key={lesson._id} number={startNumber + i} lesson={lesson} />
       ))}
     </section>

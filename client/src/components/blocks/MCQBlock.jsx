@@ -66,12 +66,12 @@ export default function MCQBlock({ block }) {
   const locked = answered || !gradable;
 
   return (
-    <div className="mt-[18px] border border-line bg-white p-[14px]">
-      <div className="mb-[9px] font-mono text-[8.5px] uppercase tracking-[0.13em] text-[#8b95a1]">
+    <div className="mt-[18px] border border-line bg-panel p-[14px]">
+      <div className="mb-[9px] font-mono text-xs uppercase tracking-[0.13em] text-mute">
         Question
       </div>
 
-      <p className="mb-[9px] text-[13px] font-semibold">{block.question}</p>
+      <p className="mb-[9px] text-base font-semibold">{block.question}</p>
 
       {/* 4. The four states of one option button. The correct answer is
              revealed even when the user picked something else — showing only
@@ -82,17 +82,17 @@ export default function MCQBlock({ block }) {
         const isCorrect = gradable && i === block.answer;
         const isPicked = selected === i;
 
-        let tone = 'border-[#e4e7eb] text-[#4a535f]';
+        let tone = 'border-line text-body';
         let mark = '';
 
         if (answered && isCorrect) {
-          tone = 'border-accent bg-[#f2fbfd] text-[#0a5567]';
+          tone = 'border-ok-line bg-ok-bg text-ok';
           mark = '✓';
         } else if (answered && isPicked) {
-          tone = 'border-[#e5b4b0] bg-[#fdf3f2] text-[#a8322b]';
+          tone = 'border-danger-line bg-danger-bg text-danger';
           mark = '✗';
         } else if (answered) {
-          tone = 'border-[#e4e7eb] text-[#9aa4b0]';
+          tone = 'border-line text-mute';
         } else {
           tone += ' hover:border-accent';
         }
@@ -103,15 +103,15 @@ export default function MCQBlock({ block }) {
             type="button"
             onClick={() => setSelected(i)}
             disabled={locked}
-            className={`mb-[5px] flex w-full items-center gap-[9px] border px-[10px] py-[7px] text-left text-[12px] disabled:cursor-default ${tone}`}
+            className={`mb-[5px] flex w-full items-center gap-[9px] border px-[10px] py-[7px] text-left text-base disabled:cursor-default ${tone}`}
           >
-            <span className="w-3 shrink-0 font-mono text-[9.5px] text-[#9aa4b0]">
+            <span className="w-3 shrink-0 font-mono text-xs text-mute">
               {String.fromCharCode(65 + i)}
             </span>
 
             <span className="min-w-0 flex-1">{option}</span>
 
-            {mark && <span className="shrink-0 font-mono text-[11px]">{mark}</span>}
+            {mark && <span className="shrink-0 font-mono text-sm">{mark}</span>}
           </button>
         );
       })}
@@ -120,8 +120,8 @@ export default function MCQBlock({ block }) {
              the pedagogically useful part of the whole block. Nothing at all if
              the field is missing. */}
       {answered && block.explanation && (
-        <div className="mt-[9px] border-l-2 border-l-chip-built pl-[10px] text-[11.5px] leading-[1.6] text-[#4a535f]">
-          <b className="mb-[3px] block font-mono text-[9px] uppercase tracking-[0.11em] text-[#0d6b5c]">
+        <div className="mt-[9px] border-l-2 border-l-ok bg-ok-bg px-[11px] py-[9px] text-base leading-[1.6] text-body">
+          <b className="mb-[4px] block font-mono text-xs uppercase tracking-[0.11em] text-ok">
             Why {String.fromCharCode(65 + block.answer)}
           </b>
           {block.explanation}

@@ -11,7 +11,7 @@
  */
 export default function ParagraphBlock({ block }) {
   return (
-    <p className="mb-[11px] max-w-[66ch] text-[13.5px] leading-[1.65] text-[#3f4854]">
+    <p className="mb-[11px] max-w-[66ch] text-base leading-[1.65] text-body">
       {block.text}
     </p>
   );

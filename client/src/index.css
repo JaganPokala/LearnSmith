@@ -6,23 +6,82 @@
    --font-mono  ->  font-mono
    Rename the prefix and the utility silently stops existing. */
 @theme {
-  --color-ink: #101418;         /* dark rail, code blocks */
-  --color-accent: #0e7490;      /* borders, active states, buttons */
-  --color-glow: #22d3ee;        /* hero headline, selected items */
-  --color-surface: #f6f7f9;     /* app background */
-  --color-line: #dfe3e8;        /* hairline borders */
-  --color-chip-built: #7dd3c0;  /* the "built" chip */
+  /* THE PALETTE. Every value is lifted from Landing.jsx, which is the look this
+     app is matching — so the marketing page and the product are one design
+     rather than two that happen to share a logo.
+
+     SURFACES, darkest first. Three is the whole range: the page, the things on
+     it, and the things inside those. */
+  --color-ground: #0a0c0f;        /* the page itself */
+  --color-panel: #0d1116;         /* cards, rows, stat cells, the rail */
+  --color-raised: #151b23;        /* code blocks, hovers, skeleton bars */
+
+  --color-line: #191f26;          /* hairlines */
+  --color-line-strong: #273039;   /* inputs, dashed empty states */
+
+  /* TEXT, brightest first. Four levels, and no more: six greys is what the
+     light theme had, and it is why nothing looked deliberate. */
+  --color-ink: #e8edf2;           /* headings, primary */
+  --color-body: #c3ccd6;          /* reading prose */
+  --color-dim: #93a0ad;           /* secondary, descriptions */
+  --color-mute: #7a8594;          /* meta, micro labels, row numbers.
+                                     Measured, not picked: at #69737f this was
+                                     3.93:1 on panel, and it carries 12-13px
+                                     text that needs 4.5:1. */
+
+  /* ACCENT */
+  --color-accent: #0e7490;        /* borders, active states */
+  --color-glow: #22d3ee;          /* selected items, accent text */
+  --color-accent-bg: #0b2730;
+  --color-accent-line: #1b4a58;
+
+  /* STATUS. Each is a text colour with a tinted panel and a border to match,
+     because every one of them is used as all three. */
+  --color-ok: #7dd3c0;
+  --color-ok-bg: #0f201d;
+  --color-ok-line: #2c5f56;
+
+  --color-danger: #f0938b;
+  --color-danger-bg: #1d1315;
+  --color-danger-line: #5f2b29;
+
+  --color-warn: #e0b064;
+  --color-warn-bg: #1c1710;
+  --color-warn-line: #57411f;
 
   --font-sans: "Archivo", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* THE TYPE SCALE. Two steps only, because Tailwind's own defaults already sit
+     where this design wants them: xs 12 / sm 14 / base 16 / lg 18 / xl 20 /
+     3xl 30. These fill the two gaps, so no screen needs an arbitrary px size.
+     Landing.jsx is deliberately outside this scale — it has its own. */
+  --text-meta: 13px;                /* mono meta: breadcrumbs, dates, counts */
+  --text-meta--line-height: 1.5;
+  --text-title: 32px;               /* the one h1 on a page */
+  --text-title--line-height: 1.15;
+
+  /* Named here rather than as an arbitrary value at the call site, so the one
+     place that owns the design system owns this too. Gives `animate-slide`. */
+  --animate-slide: slide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* The indeterminate progress bar: a short segment that crosses the track and
+   restarts, forever. Deliberately says nothing about progress — LLM latency
+   varies too much for a percentage to be anything but a lie.
+   Starts fully off the left edge and ends fully off the right, so the segment
+   is never parked at either end looking stalled. */
+@keyframes slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(400%); }
 }
 
 /* Base styles, so every page does not have to repeat bg-surface font-sans.
    Theme tokens are real CSS variables, so var() works directly. */
 body {
   margin: 0;
-  background: var(--color-surface);
-  color: var(--color-ink);
+  background: var(--color-ground);
+  color: var(--color-body);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }

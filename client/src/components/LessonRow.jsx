@@ -28,13 +28,13 @@ export default function LessonRow({ number, lesson }) {
   return (
     <Link
       to={`/lessons/${lesson._id}`}
-      className="flex items-center gap-[11px] border-b border-[#eceef1] py-[9px] text-ink hover:bg-black/[0.02]"
+      className="flex items-center gap-[11px] border-b border-line px-[13px] py-[10px] text-body last:border-b-0 hover:bg-raised hover:text-ink"
     >
-      <span className="w-[26px] shrink-0 font-mono text-[10px] text-[#9aa4b0]">
+      <span className="w-[26px] shrink-0 font-mono text-meta text-mute">
         {String(number).padStart(2, '0')}
       </span>
 
-      <span className="min-w-0 flex-1 truncate text-[13px]">{lesson.title}</span>
+      <span className="min-w-0 flex-1 truncate text-base">{lesson.title}</span>
 
       <span className="shrink-0">
         <StatusChip isEnriched={lesson.isEnriched} />

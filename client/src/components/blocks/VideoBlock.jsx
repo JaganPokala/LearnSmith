@@ -45,11 +45,11 @@ export default function VideoBlock({ block }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="my-4 flex items-center gap-3 border border-line bg-white px-[13px] py-[11px] text-ink hover:border-accent"
+      className="my-4 flex items-center gap-3 border border-line bg-panel px-[13px] py-[11px] text-ink hover:border-accent"
     >
-      <span className="flex h-[46px] w-[78px] shrink-0 items-center justify-center bg-ink">
+      <span className="flex h-[46px] w-[78px] shrink-0 items-center justify-center bg-raised">
         <svg width="13" height="15" viewBox="0 0 12 14" aria-hidden="true">
-          <path d="M0 0 L12 7 L0 14 Z" fill="#22d3ee" />
+          <path d="M0 0 L12 7 L0 14 Z" className="fill-glow" />
         </svg>
       </span>
 
@@ -58,11 +58,11 @@ export default function VideoBlock({ block }) {
                a phrase promises an embedded player that is not there; this sets
                the right expectation and stops being a lie the moment Phase 9
                lands. */}
-        <span className="mb-[3px] block font-mono text-[9px] uppercase tracking-[0.1em] text-[#8b95a1]">
+        <span className="mb-[3px] block font-mono text-xs uppercase tracking-[0.1em] text-mute">
           find this on youtube
         </span>
 
-        <span className="block truncate text-[12.5px] font-medium">{query}</span>
+        <span className="block truncate text-base font-medium">{query}</span>
       </span>
     </a>
   );

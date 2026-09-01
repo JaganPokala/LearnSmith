@@ -21,10 +21,10 @@ export default function StatusChip({ isEnriched }) {
   const className = [
     // Square corners: the Console direction is rounded-none everywhere.
     'inline-block whitespace-nowrap border px-1.5 py-px',
-    'font-mono text-[8.5px] uppercase tracking-[0.12em]',
+    'font-mono text-xs uppercase tracking-[0.12em]',
     isEnriched
-      ? 'border-chip-built bg-chip-built/20 text-accent'
-      : 'border-line text-ink/40',
+      ? 'border-ok/60 bg-ok/15 text-ok'
+      : 'border-line text-mute',
   ].join(' ');
 
   return <span className={className}>{isEnriched ? 'built' : 'empty'}</span>;

@@ -65,12 +65,12 @@ export default function LessonRenderer({ blocks }) {
         //    minute; a third of a lesson quietly missing is a bad demo.
         if (!Component) {
           return (
-            <div key={i} className="mb-3 border border-[#f0c98a] bg-[#fdf3e3] px-[13px] py-[11px]">
-              <div className="mb-[6px] font-mono text-[8.5px] uppercase tracking-[0.13em] text-[#8a5d17]">
+            <div key={i} className="mb-3 border border-warn-line bg-warn-bg px-[13px] py-[11px]">
+              <div className="mb-[6px] font-mono text-xs uppercase tracking-[0.13em] text-warn">
                 unknown block type: {String(block?.type)}
               </div>
 
-              <pre className="m-0 overflow-x-auto font-mono text-[10.5px] leading-[1.6] text-[#4a535f]">
+              <pre className="m-0 overflow-x-auto font-mono text-meta leading-[1.6] text-body">
                 {JSON.stringify(block, null, 2)}
               </pre>
             </div>

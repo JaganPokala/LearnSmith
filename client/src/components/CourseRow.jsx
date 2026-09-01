@@ -60,37 +60,37 @@ export default function CourseRow({ index, course, onDeleted }) {
   //    header row carries the same padding so the columns stay aligned.
 
   return (
-    <div className="group relative flex items-center border-b border-[#eceef1] hover:bg-black/[0.02]">
+    <div className="group relative flex items-center border-b border-line last:border-b-0 hover:bg-raised">
       <Link
         to={`/courses/${course._id}`}
-        className="flex min-w-0 flex-1 items-center gap-[11px] py-[9px] pr-[20px] text-ink"
+        className="flex min-w-0 flex-1 items-center gap-[11px] py-[10px] pl-[13px] pr-[33px] text-body"
       >
-        <span className="w-[26px] shrink-0 font-mono text-[10px] text-[#9aa4b0]">
+        <span className="w-[26px] shrink-0 font-mono text-meta text-mute">
           {String(index).padStart(2, '0')}
         </span>
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px]">{course.title}</span>
+          <span className="block truncate text-base text-ink">{course.title}</span>
 
           {course.tags?.length > 0 && (
-            <span className="mt-[2px] block truncate font-mono text-[10.5px] lowercase text-[#8b95a1]">
+            <span className="mt-[2px] block truncate font-mono text-meta lowercase text-mute">
               {course.tags.join(' · ')}
             </span>
           )}
         </span>
 
-        <span className="w-[96px] shrink-0 text-right font-mono text-[10.5px] tabular-nums text-[#6b7581]">
+        <span className="hidden w-[96px] shrink-0 text-right font-mono text-meta tabular-nums text-dim sm:block">
           {course.writtenCount} / {course.lessonCount}
         </span>
 
-        <span className="w-[74px] shrink-0 text-right font-mono text-[10.5px] text-[#6b7581]">
+        <span className="w-[74px] shrink-0 text-right font-mono text-meta text-dim">
           {timeAgo(course.createdAt)}
         </span>
       </Link>
 
       {/* Absolutely positioned so adding it did not cost the four columns a
           fifth width to keep in sync with the header row. */}
-      <span className="absolute right-0 top-1/2 -translate-y-1/2">
+      <span className="absolute right-[9px] top-1/2 -translate-y-1/2">
         <DeleteButton courseId={course._id} variant="row" onDeleted={onDeleted} />
       </span>
     </div>

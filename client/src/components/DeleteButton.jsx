@@ -85,10 +85,10 @@ export default function DeleteButton({ courseId, variant = 'row', onDeleted }) {
 
   const tone =
     error || armed
-      ? 'border-[#e5b4b0] bg-[#fdf3f2] text-[#a8322b]'
-      : 'border-transparent text-[#9aa4b0] hover:border-[#e5b4b0] hover:bg-[#fdf3f2] hover:text-[#a8322b]';
+      ? 'border-danger-line bg-danger-bg text-danger'
+      : 'border-transparent text-mute hover:border-danger-line hover:bg-danger-bg hover:text-danger';
 
-  const size = variant === 'row' ? 'px-[5px] py-[2px] text-[10px]' : 'px-[9px] py-[4px] text-[10.5px]';
+  const size = variant === 'row' ? 'px-[5px] py-[2px] text-meta' : 'px-[9px] py-[4px] text-meta';
 
   // Only the row variant hides, and only while it is idle. An armed, working or
   // failed button must stay on screen even if the pointer drifts off the row.

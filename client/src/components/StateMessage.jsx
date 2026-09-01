@@ -12,9 +12,10 @@
  * @param {'loading'|'error'|'empty'} props.kind
  * @param {string} props.title
  * @param {string} [props.detail]
+ * @param {boolean} [props.progress]  show the indeterminate bar
  * @param {React.ReactNode} [props.action]
  */
-export default function StateMessage({ kind, title, detail, action }) {
+export default function StateMessage({ kind, title, detail, progress, action }) {
   // Same layout for all three; only the border and text colour change:
   //   loading → muted text, solid faint border
   //   error   → red-ish border and heading, so it is distinguishable at a glance
@@ -23,29 +24,43 @@ export default function StateMessage({ kind, title, detail, action }) {
   // Keep it plain. Phase 7 makes these good; today they only have to exist so
   // that no screen can ever render blank.
 
+  // The BACKGROUND is part of each entry, not a shared class alongside them.
+  // `bg-panel` in the base string plus `bg-danger-bg` here would put two
+  // background utilities of equal specificity in one class list, and which one
+  // wins is decided by their order in the STYLESHEET, not in the attribute —
+  // the same silent conflict DeleteButton already hit with opacity.
   const BOX = {
-    loading: 'border-solid border-line',
-    error: 'border-solid border-[#e5b4b0] bg-[#fdf3f2]',
-    empty: 'border-dashed border-[#cdd4dc]',
+    loading: 'border-solid border-line bg-panel',
+    error: 'border-solid border-danger-line bg-danger-bg',
+    empty: 'border-dashed border-line-strong bg-panel',
   };
 
   const HEADING = {
-    loading: 'text-[#5b6470]',
-    error: 'text-[#a8322b]',
+    loading: 'text-dim',
+    error: 'text-danger',
     empty: 'text-ink',
   };
 
   return (
     <div
       role={kind === 'error' ? 'alert' : 'status'}
-      className={`max-w-[520px] border bg-white px-6 py-[26px] text-center ${BOX[kind] ?? BOX.empty}`}
+      className={`max-w-[560px] border px-6 py-[26px] text-center ${BOX[kind] ?? BOX.empty}`}
     >
-      <p className={`m-0 mb-[6px] text-[15px] font-semibold ${HEADING[kind] ?? HEADING.empty}`}>
+      <p className={`m-0 mb-[6px] text-lg font-semibold ${HEADING[kind] ?? HEADING.empty}`}>
         {title}
       </p>
 
       {detail && (
-        <p className="m-0 text-[12.5px] leading-[1.6] text-[#5b6470]">{detail}</p>
+        <p className="m-0 text-base leading-[1.6] text-dim">{detail}</p>
+      )}
+
+      {/* Same indicator as the prompt form, so both long waits in the app look
+          like the same kind of event. Indeterminate: the server reports no
+          stage, and generation latency genuinely varies. */}
+      {progress && (
+        <div className="mx-auto mt-4 h-[2px] w-full max-w-[260px] overflow-hidden bg-line">
+          <div className="h-full w-1/4 animate-slide bg-accent" />
+        </div>
       )}
 
       {action && <div className="mt-4">{action}</div>}

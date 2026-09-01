@@ -10,7 +10,7 @@
  */
 export default function HeadingBlock({ block }) {
   return (
-    <h2 className="mt-[26px] mb-[9px] text-[15.5px] font-bold tracking-[-0.01em] text-ink first:mt-0">
+    <h2 className="mt-[26px] mb-[9px] text-xl font-bold tracking-[-0.01em] text-ink first:mt-0">
       {block.text}
     </h2>
   );

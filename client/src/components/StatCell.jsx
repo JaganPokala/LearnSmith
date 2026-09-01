@@ -25,15 +25,15 @@ export default function StatCell({ label, value, of }) {
   //    real, and `of: 0` would silently lose its "/ 0".
 
   return (
-    <div className="bg-white px-[14px] py-[13px]">
-      <div className="mb-[5px] font-mono text-[8.5px] uppercase tracking-[0.13em] text-[#8b95a1]">
+    <div className="bg-panel px-[14px] py-[13px]">
+      <div className="mb-[5px] font-mono text-xs uppercase tracking-[0.13em] text-mute">
         {label}
       </div>
 
-      <div className="text-[22px] font-bold tracking-[-0.03em] tabular-nums text-ink">
+      <div className="text-3xl font-bold tracking-[-0.03em] tabular-nums text-ink">
         {value}
         {of !== undefined && (
-          <small className="text-[12px] font-medium tracking-normal text-[#8b95a1]">
+          <small className="text-sm font-medium tracking-normal text-mute">
             {' / '}
             {of}
           </small>

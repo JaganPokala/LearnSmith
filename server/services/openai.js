@@ -10,12 +10,19 @@ import { trace } from '../middlewares/trace.js';
 
 // Built once at module load. maxRetries: 0 because the SDK otherwise retries
 // twice, silently, with backoff — a call you time at 40s might be three
-// attempts. timeout 60s: above the measured 38s worst case, far below the SDK's
-// ten-minute default.
+// attempts.
+//
+// 30s, not the 60s this used to be. That number was chosen against a 38.6s
+// measurement taken before the prompt changes; nothing has come near it since
+// (6-13s across every run). It matters because MAX_ATTEMPTS is 2, so the
+// timeout doubles into the server's worst case: 60s meant a 120s request the
+// client would have to out-wait, and the client's own timeout (Task 7.3) has to
+// exceed the server's or it cancels work that was about to succeed. 30s halves
+// that to ~60s while keeping 2x headroom over anything observed.
 const client = new OpenAI({
   apiKey: config.OPENAI_API_KEY,
   maxRetries: 0,
-  timeout: 60_000,
+  timeout: 30_000,
 });
 
 /**

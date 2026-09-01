@@ -1,41 +1,41 @@
 import { Link, NavLink } from 'react-router-dom';
+import AccountBlock from './AccountBlock.jsx';
 
 /**
  * The dark rail. A FRAME, not a fixed list — each page passes its own sections
- * as children, because the library shows courses and the lesson page shows
- * sibling lessons.
+ * as children, because the library shows courses and a lesson shows its module.
+ *
+ * Sized by its wrapper in AppLayout, not here, so one place owns the width.
  *
  * @param {object} props
  * @param {React.ReactNode} props.children  the sections for this page
- * @param {React.ReactNode} [props.footer]  the small grey block pinned to the bottom
+ * @param {() => void} [props.onClose]
  */
-export default function Sidebar({ children, footer }) {
-  // 1. A fixed-width column: w-47 (188px in the design) with `shrink-0` so it
-  //    never gets squeezed. bg-ink, and flex-col so the footer can be pushed
-  //    down with mt-auto.
-  //
-  // 2. The logo at the top — font-mono, text-glow, small. Wrap it in a <Link
-  //    to="/"> so it goes home, as every app logo does.
-  //
-  // 3. {children} — whatever sections this page supplied.
-  //
-  // 4. {footer} at the bottom, pushed there with mt-auto and separated by a
-  //    top border. Only render the wrapper if `footer` was passed, or an empty
-  //    bordered strip appears on pages that have none.
-
+export default function Sidebar({ children, onClose }) {
   return (
-    <aside className="flex w-47 shrink-0 flex-col bg-ink px-4 py-5">
-      <Link to="/" className="mb-7 block font-mono text-sm tracking-tight text-glow">
-        text-to-learn
-      </Link>
+    // h-full + overflow-y-auto, or a course with sixty lessons pushes the
+    // footer off the bottom of a fixed-height drawer with no way to reach it.
+    <aside className="flex h-full w-full flex-col overflow-y-auto bg-panel px-4 py-5">
+      <div className="mb-6 flex items-center gap-2">
+        <Link to="/" className="font-mono text-base font-bold tracking-tight text-glow">
+          text-to-learn
+        </Link>
+
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Hide the sidebar"
+          className="ml-auto shrink-0 border border-line-strong px-2 py-1 font-mono text-xs text-mute hover:border-glow hover:text-glow"
+        >
+          ‹‹
+        </button>
+      </div>
 
       {children}
 
-      {footer && (
-        <div className="mt-auto border-t border-white/10 pt-4 font-mono text-[11px] text-white/40">
-          {footer}
-        </div>
-      )}
+      {/* App chrome, not page content, so it is rendered here rather than
+          passed through the rail slot — every page wants the same one. */}
+      <AccountBlock />
     </aside>
   );
 }
@@ -48,11 +48,9 @@ export default function Sidebar({ children, footer }) {
  * @param {React.ReactNode} props.children
  */
 export function SidebarSection({ label, children }) {
-  // Uppercase mono label, tight letter-spacing, muted colour — then children.
-
   return (
     <div className="mb-6">
-      <h2 className="mb-2 px-3 font-mono text-[10px] uppercase tracking-tight text-white/35">
+      <h2 className="mb-2 px-3 font-mono text-xs uppercase tracking-[0.1em] text-mute">
         {label}
       </h2>
 
@@ -64,36 +62,70 @@ export function SidebarSection({ label, children }) {
 /**
  * One clickable line in the rail.
  *
- * Uses NavLink rather than Link: NavLink knows whether its route is the one
- * currently showing, which is what drives the cyan bar on the selected item.
- * Its className accepts a function receiving { isActive }.
+ * NavLink rather than Link: it knows whether its route is the one showing,
+ * which is what drives the cyan bar on the selected item.
  *
  * @param {object} props
  * @param {string} props.to
+ * @param {boolean} [props.end]  match this path exactly, not as a prefix
  * @param {React.ReactNode} props.children
  */
-export function SidebarItem({ to, children }) {
-  // Active:   bg slightly lighter than the rail, text-glow, cyan left border.
-  // Inactive: muted text, transparent left border.
-  //
-  // Keep the left border on BOTH states, transparent when inactive — otherwise
-  // the item shifts sideways by 2px when it becomes active.
-  //
-  // Long course names must truncate, not wrap: truncate + whitespace-nowrap.
-
+export function SidebarItem({ to, end, children }) {
   return (
     <NavLink
       to={to}
+      end={end}
       className={({ isActive }) =>
         [
-          'block truncate whitespace-nowrap border-l-2 px-3 py-1.5 text-[13px]',
+          // The left border stays on both states, transparent when inactive, or
+          // the item shifts sideways by 2px the moment it becomes active.
+          'block truncate whitespace-nowrap border-l-2 px-3 py-[7px] text-base',
           isActive
-            ? 'border-glow bg-white/5 text-glow'
-            : 'border-transparent text-white/55 hover:bg-white/[0.03] hover:text-white/80',
+            ? 'border-glow bg-raised text-glow'
+            : 'border-transparent text-dim hover:bg-raised hover:text-ink',
         ].join(' ')
       }
     >
       {children}
     </NavLink>
+  );
+}
+
+/**
+ * The small filled/hollow dot that marks whether a lesson has been written.
+ *
+ * Sits BEFORE the title: SidebarItem truncates, and truncation clips from the
+ * end — a marker after the title is the first thing lost on exactly the long
+ * names where you still want it.
+ *
+ * @param {object} props
+ * @param {boolean} props.isEnriched
+ */
+export function SidebarDot({ isEnriched }) {
+  return (
+    <span
+      className={`mr-[7px] inline-block h-[5px] w-[5px] rounded-full align-middle ${
+        isEnriched ? 'bg-ok' : 'bg-line-strong'
+      }`}
+    />
+  );
+}
+
+/**
+ * The small grey block under a page's rail sections — totals, counts.
+ *
+ * Exported rather than a prop on Sidebar: pages reach the rail through
+ * `children` only, so a prop here would be one no caller could ever set. It no
+ * longer takes `mt-auto`; AccountBlock owns the bottom of the rail, and two
+ * elements both claiming the free space leaves the first floating mid-column.
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ */
+export function SidebarFooter({ children }) {
+  return (
+    <div className="mt-3 border-t border-line pt-3 font-mono text-meta text-mute">
+      {children}
+    </div>
   );
 }

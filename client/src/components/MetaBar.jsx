@@ -36,15 +36,15 @@ export default function MetaBar({ pill, stats = [], action }) {
   return (
     <div className="mb-[15px] flex flex-wrap items-center gap-[9px] border-b border-line pb-[11px]">
       {pill && (
-        <span className="bg-[#dff4f8] px-[7px] py-[3px] font-mono text-[9px] uppercase tracking-[0.1em] text-[#0b6478]">
+        <span className="bg-accent-bg px-[7px] py-[3px] font-mono text-xs uppercase tracking-[0.1em] text-glow">
           {pill}
         </span>
       )}
 
       {visible.map((stat, i) => (
         <Fragment key={`${i}-${stat}`}>
-          {i > 0 && <span className="font-mono text-[10.5px] text-[#6b7581]">·</span>}
-          <span className="font-mono text-[10.5px] text-[#6b7581]">{stat}</span>
+          {i > 0 && <span className="font-mono text-meta text-dim">·</span>}
+          <span className="font-mono text-meta text-dim">{stat}</span>
         </Fragment>
       ))}
 

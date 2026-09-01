@@ -11,6 +11,7 @@ import Module from '../models/Module.js';
 import Course from '../models/Course.js';
 import { generateLesson } from '../services/lessonGenerator.js';
 import { creatorOf } from '../middlewares/auth.js';
+import { resolveVideoBlocks } from '../services/youtube.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
 
@@ -72,7 +73,14 @@ export async function generateLessonContent(req, res) {
   // ASSIGN THE WHOLE ARRAY. Mongoose cannot see mutations inside a Mixed field,
   // so `lesson.content[0].text = 'x'` saves nothing and throws nothing.
   // isEnriched last, or a failed save leaves a lesson marked generated but empty.
-  lesson.content = generated.content;
+  // Video queries become real video ids HERE, once, before the lesson is
+  // stored — never on read. A search costs 100 of 10,000 daily quota units, so
+  // resolving per view would spend the day's budget on repeat visits to the
+  // same lesson. Resolved ids live in the block and every later read is free.
+  //
+  // Cannot throw: a lesson whose lookup failed keeps its query and renders the
+  // search link, exactly as it does today.
+  lesson.content = await resolveVideoBlocks(generated.content);
   lesson.objectives = generated.objectives;
   lesson.isEnriched = true;
 

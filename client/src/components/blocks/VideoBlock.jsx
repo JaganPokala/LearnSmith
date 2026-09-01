@@ -1,49 +1,65 @@
 /**
- * { type: 'video', query }
+ * { type: 'video', query, videoId?, title?, channel? }
  *
- * `query` IS A SEARCH QUERY, NOT A URL. Real example from the database:
+ * `query` is a SEARCH PHRASE the model wrote, never a URL — asked for a link,
+ * a model invents a plausible video id that 404s (schemas.js).
  *
- *     { "type": "video", "query": "Types of Intelligent Agents" }
- *
- * You cannot put that in an <iframe src>. The prompt deliberately asks for a
- * query rather than a URL because a model asked for a URL invents one — a
- * plausible youtube.com/watch?v=... that 404s (schemas.js:174).
- *
- * Phase 9 resolves queries to real videos through the YouTube API. Until then
- * this renders as a link to the search results, which is honest: it says what
- * to look for and gets the user there in one click.
+ * `videoId` is added by the server at lesson-write time (services/youtube.js)
+ * when a YouTube key is configured and the search found an embeddable video.
+ * It is often absent: no key, no results, or nothing embeddable. Both shapes
+ * render, and the query is kept either way — it is the fallback now and the
+ * recovery path when a stored video is later deleted.
  *
  * @param {object} props
  * @param {object} props.block
  */
 export default function VideoBlock({ block }) {
-  // 2. Render nothing at all if `query` is missing or blank. A "Watch:" card
-  //    with an empty title linking to an empty search is worse than no card.
-
   const query = typeof block.query === 'string' ? block.query.trim() : '';
+  const videoId = typeof block.videoId === 'string' ? block.videoId.trim() : '';
 
-  if (!query) return null;
+  // A card with an empty title linking to an empty search is worse than none.
+  if (!query && !videoId) return null;
 
-  // 1. Build the search URL.
-  //
-  //    encodeURIComponent is not optional. These queries are English phrases
-  //    with spaces, and some contain & or + — "React & Redux" pasted raw makes
-  //    everything after the & a separate URL parameter, and the search silently
-  //    runs on half the phrase.
+  if (videoId) {
+    return (
+      <figure className="my-4">
+        {/* 16:9 without a magic pixel height: padding-top on a percentage is
+            resolved against the WIDTH, so the box keeps its ratio at every
+            rail width. The iframe then fills it absolutely. */}
+        <div className="relative h-0 w-full overflow-hidden border border-line bg-raised pt-[56.25%]">
+          <iframe
+            className="absolute inset-0 h-full w-full"
+            // youtube-nocookie: no tracking cookie until the viewer presses
+            // play. Same player, same embed rules.
+            src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`}
+            title={block.title || query || 'Lesson video'}
+            loading="lazy"
+            // The exact set the YouTube player needs; without allowfullscreen
+            // the fullscreen button is present and does nothing.
+            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
 
+        <figcaption className="mt-[7px] flex flex-wrap items-baseline gap-x-2 text-meta text-mute">
+          <span className="font-mono uppercase tracking-[0.1em] text-glow">video</span>
+          {block.title && <span className="min-w-0 flex-1 truncate text-body">{block.title}</span>}
+          {block.channel && <span className="shrink-0">{block.channel}</span>}
+        </figcaption>
+      </figure>
+    );
+  }
+
+  // encodeURIComponent is not optional: these are English phrases, and one
+  // containing & or + would otherwise search on half of itself.
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-
-  // 3. The card: a bordered row with a small mono label, the query as the
-  //    visible text, and the whole thing an <a>.
-  //
-  //    target="_blank" so the lesson is not lost — and rel="noopener noreferrer"
-  //    with it. Without noopener the opened tab gets a handle back to this page
-  //    through window.opener and can navigate it somewhere else.
 
   return (
     <a
       href={url}
       target="_blank"
+      // Without noopener the opened tab gets window.opener back to this page.
       rel="noopener noreferrer"
       className="my-4 flex items-center gap-3 border border-line bg-panel px-[13px] py-[11px] text-ink hover:border-accent"
     >
@@ -54,10 +70,8 @@ export default function VideoBlock({ block }) {
       </span>
 
       <span className="min-w-0">
-        {/* 4. Say it is a search, not a video. A label reading "watch" next to
-               a phrase promises an embedded player that is not there; this sets
-               the right expectation and stops being a lie the moment Phase 9
-               lands. */}
+        {/* Says it is a search, not a video. "Watch" next to a phrase promises
+            a player that is not there. */}
         <span className="mb-[3px] block font-mono text-xs uppercase tracking-[0.1em] text-mute">
           find this on youtube
         </span>

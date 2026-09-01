@@ -9,6 +9,7 @@ import LessonSkeleton from '../components/LessonSkeleton.jsx';
 import { describeError } from '../lib/errors.js';
 import { stripEchoedTitle } from '../lib/lessonBody.js';
 import RetryButton from '../components/RetryButton.jsx';
+import { useAuth } from '../lib/auth.js';
 
 /**
  * One measure for the whole article. The objectives box, the skeleton and the
@@ -35,7 +36,11 @@ const MEASURE = 'max-w-[720px]';
 export default function LessonPage() {
   const { lessonId } = useParams();
 
-  const { data, loading, error, applyGeneratedLesson } = useLesson(lessonId);
+  // Held until auth settles, for the same reason as the course page: a
+  // tokenless reload of your own lesson is a 404.
+  const { isLoading: authLoading } = useAuth();
+
+  const { data, loading, error, applyGeneratedLesson } = useLesson(lessonId, !authLoading);
   const { run, pendingId, failure, reset } = useGenerateLesson();
 
   const { setRail } = useOutletContext();

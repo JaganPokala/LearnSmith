@@ -7,9 +7,10 @@ import { api } from '../lib/api.js';
  * Lesson CONTENT is not included (the endpoint excludes it deliberately); this
  * is enough to draw the module list and the built/empty chips.
  *
+ * @param {boolean} [ready]  false while auth is still resolving
  * @param {string} id  from useParams().courseId
  */
-export function useCourse(id) {
+export function useCourse(id, ready = true) {
   // Same three states as useCourses.
 
   const [data, setData] = useState(null);
@@ -40,6 +41,16 @@ export function useCourse(id) {
   // sets nothing when it finally lands.
 
   useEffect(() => {
+    // Wait until we know whether there is a token. These routes are readable by
+    // a guest, so this is NOT "is the user signed in" — it is "has auth
+    // settled". On a hard reload Auth0 needs a moment, and a request that
+    // leaves first carries no Authorization header: the server sees a guest and
+    // a signed-in user's own course comes back 404. Same URL, fine when you
+    // navigate to it, broken when you refresh it.
+    //
+    // `loading` stays true here on purpose — the fetch is coming.
+    if (!ready) return;
+
     // Guard the empty id: if `id` is falsy, do not fetch at all.
     if (!id) {
       setLoading(false);
@@ -71,7 +82,7 @@ export function useCourse(id) {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, ready]);
 
   return { data, loading, error };
 }

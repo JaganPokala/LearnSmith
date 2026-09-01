@@ -7,6 +7,7 @@ import ModuleSection from '../components/ModuleSection.jsx';
 import StateMessage from '../components/StateMessage.jsx';
 import { describeError } from '../lib/errors.js';
 import RetryButton from '../components/RetryButton.jsx';
+import { useAuth } from '../lib/auth.js';
 import DeleteButton from '../components/DeleteButton.jsx';
 import {
   SidebarSection,
@@ -31,7 +32,11 @@ export default function CoursePage() {
   // and a 400 that points at the id rather than at the typo behind it.
   const { courseId } = useParams();
 
-  const { data: course, loading, error } = useCourse(courseId);
+  // Held until auth settles, or a reload of a signed-in user's own course
+  // goes out tokenless and comes back 404.
+  const { isLoading: authLoading } = useAuth();
+
+  const { data: course, loading, error } = useCourse(courseId, !authLoading);
 
   // Every hook is declared before the early returns below: hooks must run in
   // the same order on every render, and one sitting after `if (loading) return`

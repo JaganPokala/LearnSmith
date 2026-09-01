@@ -88,6 +88,19 @@ function table(noun) {
     empty_prompt: { title: 'Type a topic first', retry: false },
     missing_prompt: { title: 'Type a topic first', retry: false },
 
+    // ── signed out. Retrying the same anonymous request can never succeed;
+    //    the screen offers a sign-in button instead of a Try again.
+    not_authenticated: {
+      title: 'Sign in to see your courses',
+      detail: 'Your library is private. Courses made without an account are not saved to one.',
+      retry: false,
+    },
+    invalid_token: {
+      title: 'Your session has expired',
+      detail: 'Sign in again to pick up where you left off.',
+      retry: false,
+    },
+
     // ── it is gone. Nothing to retry.
     course_not_found: {
       title: 'This course does not exist, or was deleted',

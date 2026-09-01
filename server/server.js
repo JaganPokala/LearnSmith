@@ -16,6 +16,7 @@ import coursesRouter from './routes/courses.js';
 import lessonsRouter from './routes/lessons.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
 import { requestTrace, traceError } from './middlewares/trace.js';
+import { attachUser } from './middlewares/auth.js';
 import { connectDB, disconnectDB } from './config/db.js';
 
 const app = express();
@@ -82,6 +83,11 @@ app.get('/', (req, res) => {
     health: '/api/health',
   });
 });
+
+// Before every router, after express.json. It never rejects — it only decides
+// whether this request is a signed-in user or the shared guest — so it is safe
+// to run in front of routes that are deliberately public.
+app.use(attachUser);
 
 // Mount path and route path concatenate: '/' inside health.js becomes
 // /api/health.

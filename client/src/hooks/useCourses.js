@@ -9,8 +9,15 @@ import { api } from '../lib/api.js';
  *
  * Exposes `refetch` because the library changes from inside the page: creating
  * a course and deleting one both need the list to update afterwards.
+ *
+ * `enabled` gates the request. The route requires a token, and on a cold load
+ * the token is not ready for the first render or two — firing anyway produces a
+ * 401 the page then has to un-say once auth settles. Not fetching is simpler
+ * than recovering.
+ *
+ * @param {boolean} [enabled]
  */
-export function useCourses() {
+export function useCourses(enabled = true) {
   // 1. Three pieces of state: data (null at first), loading (true at first),
   //    error (null at first).
   //
@@ -19,7 +26,9 @@ export function useCourses() {
   //    flash of "no courses yet" every single time you open the library.
 
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Starts false when disabled: `true` plus a request that never fires is a
+  // spinner that never stops.
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
 
   // 2. A `load` function wrapped in useCallback, so the effect below can depend
@@ -32,6 +41,11 @@ export function useCourses() {
   //    and the effect below runs once.
 
   const load = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -42,7 +56,7 @@ export function useCourses() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   // 3. useEffect(() => { load(); }, [load]) — run on mount.
 

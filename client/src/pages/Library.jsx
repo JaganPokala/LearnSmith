@@ -6,6 +6,7 @@ import CourseRow from '../components/CourseRow.jsx';
 import StateMessage from '../components/StateMessage.jsx';
 import PromptForm from '../components/PromptForm.jsx';
 import { SidebarSection, SidebarItem, SidebarFooter } from '../components/Sidebar.jsx';
+import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
 
 /**
  * GET /api/courses — the library.
@@ -17,7 +18,12 @@ import { SidebarSection, SidebarItem, SidebarFooter } from '../components/Sideba
  *   one CourseRow each
  */
 export default function LibraryPage() {
-  const { data, loading, error, refetch } = useCourses();
+  const { isAuthenticated, isLoading: authLoading, loginWithRedirect } = useAuth();
+
+  // The request is held until we know who is asking. On a cold load the token
+  // is not ready for the first render or two, and firing early earns a 401 the
+  // page would then have to take back.
+  const { data, loading, error, refetch } = useCourses(isAuthenticated);
 
   // Declared before the early returns: hooks must run in the same order on
   // every render.
@@ -47,6 +53,44 @@ export default function LibraryPage() {
     return () => setRail(null);
   }, [data, setRail]);
 
+  // ---------------------------------------------------------------- signed out
+  // This route is the only private one in the app, and the server fails CLOSED:
+  // it 401s when auth is unconfigured rather than serving the shared guest
+  // library, which is the one list that must never be shown. So the page has to
+  // answer for that case too, or an unconfigured deployment looks broken.
+  if (authLoading) {
+    return <StateMessage kind="loading" title="Checking your session…" />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <h1 className="mb-[5px] text-title font-bold tracking-[-0.022em]">Your library</h1>
+
+        <StateMessage
+          kind="empty"
+          title={AUTH_ENABLED ? 'Sign in to see your courses' : 'Sign-in is not configured'}
+          detail={
+            AUTH_ENABLED
+              ? 'Your library is private. Courses you generate without an account are for trying it out — they are not saved to one.'
+              : 'This deployment has no Auth0 credentials set, so there is no account to sign in to. The library stays closed rather than showing every visitor the shared guest courses.'
+          }
+          action={
+            AUTH_ENABLED ? (
+              <button
+                type="button"
+                onClick={() => loginWithRedirect()}
+                className="border border-accent-line bg-accent-bg px-[13px] py-[6px] text-sm font-semibold text-glow hover:border-glow hover:bg-raised"
+              >
+                Sign in →
+              </button>
+            ) : undefined
+          }
+        />
+      </>
+    );
+  }
+
   // Three states before any markup, each meaning `data` is not safe to read.
   // `data.totals` on the first render is the classic crash here.
   if (loading) {
@@ -62,6 +106,9 @@ export default function LibraryPage() {
       />
     );
   }
+
+  // Auth just resolved and the first fetch has not landed yet.
+  if (!data) return <StateMessage kind="loading" title="Loading your courses…" />;
 
   const { totals, courses } = data;
 

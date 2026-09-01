@@ -7,6 +7,7 @@ import Course from '../models/Course.js';
 import Lesson from '../models/Lesson.js';
 import { generateCourse } from '../services/courseGenerator.js';
 import { saveCourseTree, deleteCourseTree } from '../services/courseService.js';
+import { creatorOf } from '../middlewares/auth.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
 
@@ -14,7 +15,6 @@ import { trace } from '../middlewares/trace.js';
  * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
  * where it becomes req.auth.payload.sub. One library, shared by every visitor.
  */
-const GUEST_CREATOR = 'guest-user';
 
 /** Longest prompt worth sending. Beyond this it is not a topic, it is an essay. */
 const MAX_PROMPT_LENGTH = 200;
@@ -87,7 +87,7 @@ export async function createCourse(req, res) {
 
   const { course, attempts, ms } = await generateCourse(topic);
 
-  const saved = await saveCourseTree(course, GUEST_CREATOR);
+  const saved = await saveCourseTree(course, creatorOf(req));
 
   // Generation ms and total ms separately: that is what tells you later whether
   // a slow request was the model or the database.
@@ -112,7 +112,7 @@ export async function createCourse(req, res) {
  */
 export async function listCourses(req, res) {
   // The query the { creator: 1, createdAt: -1 } compound index was built for.
-  const courses = await Course.find({ creator: GUEST_CREATOR })
+  const courses = await Course.find({ creator: creatorOf(req) })
     .select('title description tags createdAt')
     .sort({ createdAt: -1 })
     .limit(LIST_LIMIT)
@@ -194,7 +194,7 @@ export async function getCourse(req, res) {
   // invalid_id, so there is no id check here.
   const course = await Course.findOne({
     _id: req.params.id,
-    creator: GUEST_CREATOR,
+    creator: creatorOf(req),
   }).populate({
     path: 'modules',
     // Only what a lesson ROW needs. content and objectives are the heavy fields
@@ -220,7 +220,7 @@ export async function removeCourse(req, res) {
   // mean the delete had already happened.
   const course = await Course.findOne({
     _id: req.params.id,
-    creator: GUEST_CREATOR,
+    creator: creatorOf(req),
   }).select('_id');
 
   if (!course) {

@@ -88,6 +88,24 @@ function table(noun) {
     empty_prompt: { title: 'Type a topic first', retry: false },
     missing_prompt: { title: 'Type a topic first', retry: false },
 
+    // ── narration. None is retryable in place: the lesson has to change, or
+    //    the server does.
+    nothing_to_narrate: {
+      title: 'There is nothing to read aloud yet',
+      detail: 'Write the lesson first — narration is generated from its text.',
+      retry: false,
+    },
+    audio_not_found: {
+      title: 'This lesson has no narration yet',
+      detail: 'Generate it and it will be saved for next time.',
+      retry: false,
+    },
+    tts_unavailable: {
+      title: 'Narration is not available right now',
+      detail: 'The speech service did not answer. Nothing was charged and nothing was saved.',
+      retry: true,
+    },
+
     // ── signed out. Retrying the same anonymous request can never succeed;
     //    the screen offers a sign-in button instead of a Try again.
     not_authenticated: {

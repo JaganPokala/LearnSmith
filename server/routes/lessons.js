@@ -4,7 +4,12 @@
  */
 
 import { Router } from 'express';
-import { generateLessonContent, getLesson } from '../controllers/lessonController.js';
+import {
+  getLesson,
+  generateLessonContent,
+  getLessonAudio,
+  generateLessonAudioContent,
+} from '../controllers/lessonController.js';
 import { requireDatabase } from '../middlewares/requireDatabase.js';
 
 const router = Router();
@@ -14,5 +19,10 @@ router.use(requireDatabase);
 
 router.get('/:id', getLesson);
 router.post('/:id/generate', generateLessonContent);
+
+// GET reads, POST pays. Same split as the lesson itself: a revalidation or a
+// link preview must never start a billed synthesis.
+router.get('/:id/audio', getLessonAudio);
+router.post('/:id/audio', generateLessonAudioContent);
 
 export default router;

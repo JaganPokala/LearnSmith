@@ -51,7 +51,7 @@ export function setTokenSource(fn) {
   tokenSource = fn;
 }
 
-async function request(path, { timeoutMs = READ_TIMEOUT_MS, ...options } = {}) {
+async function request(path, { timeoutMs = READ_TIMEOUT_MS, parse = 'json', ...options } = {}) {
   let res;
 
   // AWAIT. `tokenSource()` returns a promise, and a forgotten await sends the
@@ -113,7 +113,11 @@ async function request(path, { timeoutMs = READ_TIMEOUT_MS, ...options } = {}) {
     );
   }
 
-  return res.json();
+  // Binary responses (lesson narration) come back as a Blob. The alternative —
+  // pointing an <audio src> at the URL — cannot work: the browser fetches that
+  // natively, outside this file, so it carries no Authorization header and an
+  // owned lesson answers 404. Same shape as the F5 reload bug.
+  return parse === 'blob' ? res.blob() : res.json();
 }
 
 export const api = {
@@ -134,4 +138,11 @@ export const api = {
     }),
 
   delete: (path) => request(path, { method: 'DELETE' }),
+
+  /** Read binary. Returns a Blob; 404s throw like any other request. */
+  getBlob: (path) => request(path, { parse: 'blob' }),
+
+  /** Generate binary. Long deadline: synthesis took 24s when measured. */
+  postBlob: (path) =>
+    request(path, { method: 'POST', parse: 'blob', timeoutMs: GENERATE_TIMEOUT_MS }),
 };

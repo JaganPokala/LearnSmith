@@ -6,6 +6,7 @@ import { SidebarSection, SidebarItem, SidebarDot } from '../components/Sidebar.j
 import StateMessage from '../components/StateMessage.jsx';
 import LessonRenderer from '../components/blocks/LessonRenderer.jsx';
 import LessonSkeleton from '../components/LessonSkeleton.jsx';
+import AudioPlayer from '../components/AudioPlayer.jsx';
 import { describeError } from '../lib/errors.js';
 import { stripEchoedTitle } from '../lib/lessonBody.js';
 import RetryButton from '../components/RetryButton.jsx';
@@ -136,7 +137,24 @@ export default function LessonPage() {
         {position != null ? ` / lesson ${position} of ${total}` : ''}
       </p>
 
-      <h1 className="mb-4 text-title font-bold tracking-[-0.022em]">{lesson.title}</h1>
+      <div className="mb-4 flex items-start gap-3">
+        <h1 className="min-w-0 flex-1 text-title font-bold tracking-[-0.022em]">{lesson.title}</h1>
+
+        {/* window.print() rather than a PDF library: the browser already knows
+            how to paginate without cutting a line in half, and its "Save as
+            PDF" produces real selectable text. A screenshot-based export would
+            add ~550kB to the bundle to produce a picture of this page. */}
+        {lesson.isEnriched && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            title="Opens your print dialog — choose 'Save as PDF'"
+            className="mt-[6px] shrink-0 border border-line bg-panel px-[11px] py-[5px] font-mono text-xs text-dim hover:border-accent hover:text-accent print:hidden"
+          >
+            ⇩ pdf
+          </button>
+        )}
+      </div>
     </>
   );
 
@@ -215,6 +233,13 @@ export default function LessonPage() {
       {header}
 
       <div className={MEASURE}>
+      {/* Above the objectives: someone who wants to listen rather than read
+          should not have to scroll the whole lesson to find that out. */}
+      {/* Keyed so a move between sibling lessons REMOUNTS it. Without the
+          key the component is reused, and it would show the previous lesson's
+          recording under the new lesson's title — F3 all over again, in audio. */}
+      <AudioPlayer key={lessonId} lessonId={lessonId} />
+
       {/* Nothing at all when the array is empty — an empty labelled box looks
           like a rendering bug. */}
       {lesson.objectives?.length > 0 && (

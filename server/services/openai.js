@@ -111,3 +111,108 @@ export async function generateJSON({ messages, schema, schemaName, maxTokens }) 
 
   return { text, ms, usage: res.usage, finishReason };
 }
+
+/**
+ * Ask the model for plain text. No schema, no JSON — used for translation,
+ * where the output is prose and a structured wrapper would only be something to
+ * unwrap again.
+ *
+ * @param {object} args
+ * @param {Array<{role: string, content: string}>} args.messages
+ * @param {number} [args.maxTokens]
+ * @returns {Promise<{ text: string, ms: number }>}
+ */
+export async function generateText({ messages, maxTokens }) {
+  const startedAt = performance.now();
+
+  let res;
+
+  try {
+    res = await client.chat.completions.create({
+      model: config.OPENAI_TEXT_MODEL,
+      messages,
+      ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
+    });
+  } catch (err) {
+    throw new ApiError(
+      502,
+      'ai_unavailable',
+      `OpenAI text request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+    );
+  }
+
+  const ms = Math.round(performance.now() - startedAt);
+  const choice = res.choices?.[0];
+
+  // Same truncation trap as generateJSON: 'length' means it hit the cap
+  // mid-sentence, and half a translation reads as a complete one.
+  if (choice?.finish_reason === 'length') {
+    throw new ApiError(
+      502,
+      'ai_truncated',
+      `The model hit the token cap mid-text after ${ms}ms (max_completion_tokens: ${maxTokens ?? 'model default'}).`
+    );
+  }
+
+  const text = choice?.message?.content ?? '';
+
+  if (!text.trim()) {
+    throw new ApiError(502, 'ai_empty', `The model returned no text after ${ms}ms.`);
+  }
+
+  trace(
+    `  openai: ${config.OPENAI_TEXT_MODEL} text ${ms}ms` +
+      ` prompt=${res.usage?.prompt_tokens ?? '?'} completion=${res.usage?.completion_tokens ?? '?'}`
+  );
+
+  return { text: text.trim(), ms };
+}
+
+/**
+ * Text to speech. Returns raw BYTES, not a URL — the caller decides where they
+ * live.
+ *
+ * A longer timeout than the text calls: synthesis time scales with the length
+ * of the input, and three minutes of audio is not a 30-second request.
+ *
+ * @param {object} args
+ * @param {string} args.text          what to say (API caps this at 4096 chars)
+ * @param {string} [args.voice]
+ * @param {string} [args.instructions]  how to say it - accent, pace, tone
+ * @returns {Promise<{ bytes: Buffer, ms: number }>}
+ */
+export async function synthesizeSpeech({ text, voice = 'alloy', instructions }) {
+  const startedAt = performance.now();
+
+  let res;
+
+  try {
+    res = await client.audio.speech.create(
+      {
+        model: config.OPENAI_TTS_MODEL,
+        voice,
+        input: text,
+        // mp3 rather than the default-by-accident: it is the one format every
+        // browser plays from a blob without a codec negotiation.
+        response_format: 'mp3',
+        ...(instructions ? { instructions } : {}),
+      },
+      { timeout: 90_000 }
+    );
+  } catch (err) {
+    throw new ApiError(
+      502,
+      'tts_unavailable',
+      `OpenAI speech request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+    );
+  }
+
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const ms = Math.round(performance.now() - startedAt);
+
+  trace(
+    `  openai: ${config.OPENAI_TTS_MODEL} speech ${ms}ms, ${text.length} chars -> ${Math.round(bytes.length / 1024)}KB`
+  );
+
+  return { bytes, ms };
+}

@@ -66,7 +66,7 @@ export default function MCQBlock({ block }) {
   const locked = answered || !gradable;
 
   return (
-    <div className="mt-[18px] border border-line bg-panel p-[14px]">
+    <div className="print-keep mt-[18px] border border-line bg-panel p-[14px]">
       <div className="mb-[9px] font-mono text-xs uppercase tracking-[0.13em] text-mute">
         Question
       </div>
@@ -116,11 +116,24 @@ export default function MCQBlock({ block }) {
         );
       })}
 
+      {/* PRINT ONLY. On screen the answer is earned by clicking; on paper there
+          is nothing to click, so an unanswered quiz would print as four options
+          and no way to know which is right. Hidden on screen so it cannot spoil
+          the interactive version. */}
+      {gradable && (
+        <div className="hidden print:block mt-[9px] border-l-2 border-l-ok bg-ok-bg px-[11px] py-[9px] text-base leading-[1.6] text-body">
+          <b className="mb-[4px] block font-mono text-xs uppercase tracking-[0.11em] text-ok">
+            Answer: {String.fromCharCode(65 + block.answer)}
+          </b>
+          {block.explanation}
+        </div>
+      )}
+
       {/* 5. The explanation is why the schema asks for one (Milestone 8) and is
              the pedagogically useful part of the whole block. Nothing at all if
              the field is missing. */}
       {answered && block.explanation && (
-        <div className="mt-[9px] border-l-2 border-l-ok bg-ok-bg px-[11px] py-[9px] text-base leading-[1.6] text-body">
+        <div className="mt-[9px] border-l-2 border-l-ok bg-ok-bg px-[11px] py-[9px] text-base leading-[1.6] text-body print:hidden">
           <b className="mb-[4px] block font-mono text-xs uppercase tracking-[0.11em] text-ok">
             Why {String.fromCharCode(65 + block.answer)}
           </b>

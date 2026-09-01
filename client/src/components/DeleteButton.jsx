@@ -114,7 +114,7 @@ export default function DeleteButton({ courseId, variant = 'row', onDeleted }) {
       // with no idea what is being deleted.
       aria-label={armed ? 'Confirm delete course' : 'Delete course'}
       title={error ? error.message : undefined}
-      className={`shrink-0 whitespace-nowrap border font-mono tracking-tight disabled:cursor-wait ${size} ${tone} ${visibility}`}
+      className={`shrink-0 whitespace-nowrap border font-mono tracking-tight disabled:cursor-wait print:hidden ${size} ${tone} ${visibility}`}
     >
       {label}
     </button>

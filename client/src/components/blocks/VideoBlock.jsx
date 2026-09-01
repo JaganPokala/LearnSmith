@@ -22,11 +22,14 @@ export default function VideoBlock({ block }) {
 
   if (videoId) {
     return (
-      <figure className="my-4">
+      <figure className="print-keep my-4">
         {/* 16:9 without a magic pixel height: padding-top on a percentage is
             resolved against the WIDTH, so the box keeps its ratio at every
             rail width. The iframe then fills it absolutely. */}
-        <div className="relative h-0 w-full overflow-hidden border border-line bg-raised pt-[56.25%]">
+        {/* An iframe prints as an empty rectangle — the player is not
+            rendered by the print engine. Hidden, and the caption below carries
+            the title and a watchable link instead. */}
+        <div className="relative h-0 w-full overflow-hidden border border-line bg-raised pt-[56.25%] print:hidden">
           <iframe
             className="absolute inset-0 h-full w-full"
             // youtube-nocookie: no tracking cookie until the viewer presses
@@ -44,8 +47,17 @@ export default function VideoBlock({ block }) {
 
         <figcaption className="mt-[7px] flex flex-wrap items-baseline gap-x-2 text-meta text-mute">
           <span className="font-mono uppercase tracking-[0.1em] text-glow">video</span>
-          {block.title && <span className="min-w-0 flex-1 truncate text-body">{block.title}</span>}
+          {/* truncate on screen, wrap in print — paper has no hover to reveal
+              the rest of a clipped title. */}
+          {block.title && (
+            <span className="min-w-0 flex-1 truncate text-body print:overflow-visible print:whitespace-normal">
+              {block.title}
+            </span>
+          )}
           {block.channel && <span className="shrink-0">{block.channel}</span>}
+          <span className="hidden print:block w-full break-all">
+            youtube.com/watch?v={videoId}
+          </span>
         </figcaption>
       </figure>
     );

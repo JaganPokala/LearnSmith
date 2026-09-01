@@ -105,7 +105,7 @@ export default function AppLayout() {
         <div
           aria-hidden="true"
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/50 md:hidden print:hidden"
         />
       )}
 
@@ -123,7 +123,7 @@ export default function AppLayout() {
       <div
         onClick={closeIfLinkOnPhone}
         style={{ '--rail': width === null ? '25%' : `${width}px` }}
-        className={`${open ? 'block' : 'hidden'} fixed inset-y-0 left-0 z-40 w-[82%] max-w-[330px] md:relative md:w-[var(--rail)] md:min-w-[220px] md:max-w-[min(560px,33vw)]`}
+        className={`${open ? 'block' : 'hidden'} print:!hidden fixed inset-y-0 left-0 z-40 w-[82%] max-w-[330px] md:relative md:w-[var(--rail)] md:min-w-[220px] md:max-w-[min(560px,33vw)]`}
       >
         <Sidebar onClose={() => setOpen(false)}>{rail}</Sidebar>
 
@@ -151,7 +151,7 @@ export default function AppLayout() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Show the sidebar"
-            className="sticky top-3 z-20 mb-4 border border-line bg-panel px-[9px] py-[5px] font-mono text-xs text-dim hover:border-accent hover:text-accent"
+            className="sticky top-3 z-20 mb-4 border border-line bg-panel px-[9px] py-[5px] font-mono text-xs text-dim hover:border-accent hover:text-accent print:hidden"
           >
             ›› menu
           </button>
@@ -166,7 +166,7 @@ export default function AppLayout() {
                      dragged rail width, so it is different on every screen
                      and changes as you drag.
             closed → centred, because there is nothing to sit beside. */}
-        <div className={`max-w-[1100px] ${open ? '' : 'mx-auto'}`}>
+        <div className={`print-full max-w-[1100px] ${open ? '' : 'mx-auto'}`}>
           <Outlet context={outletContext} />
         </div>
       </main>

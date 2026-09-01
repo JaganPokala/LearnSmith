@@ -85,3 +85,93 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── PRINT ──────────────────────────────────────────────────────────────────
+   The whole dark-to-light switch is this one block, because D37 put every
+   colour behind a token. Redefine the tokens and every component follows —
+   no component knows it is being printed.
+
+   Real text, not a screenshot: it stays selectable, searchable and
+   accessible in the PDF, and the browser paginates it without ever cutting
+   through a line the way a sliced canvas does. */
+@media print {
+  :root {
+    --color-ground: #ffffff;
+    --color-panel: #ffffff;
+    --color-raised: #f5f6f8;
+
+    --color-line: #d7dce2;
+    --color-line-strong: #b4bcc5;
+
+    --color-ink: #0d1114;
+    --color-body: #232c34;
+    --color-dim: #444e58;
+    --color-mute: #626c76;
+
+    --color-accent: #0b5f72;
+    --color-glow: #0a5163;
+    --color-accent-bg: #f1fafc;
+    --color-accent-line: #a8d4de;
+
+    --color-ok: #0c6153;
+    --color-ok-bg: #f2faf8;
+    --color-ok-line: #86c9b9;
+
+    --color-danger: #9a2f28;
+    --color-danger-bg: #fdf4f3;
+    --color-danger-line: #dfb2ad;
+  }
+
+  /* Margins belong to the PAGE, not the element — a padded body puts its
+     padding on page one only, and every page after starts at the paper edge. */
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* Backgrounds are dropped by default in most browsers' print settings, which
+     would silently erase the objectives panel and the quiz answer. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The layout is a flex row with a fixed-width rail. In print there is no
+     rail, so the main column must stop behaving like a flex child. */
+  main {
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  /* Nothing should be capped or centred on paper — the page already is. */
+  .print-full {
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  /* A heading alone at the foot of a page, or one orphan line, is the most
+     visible thing a print stylesheet can get wrong. */
+  h1, h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* These are single units of meaning; splitting one across a page break makes
+     it unreadable rather than merely ugly. */
+  figure, pre, .print-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a {
+    text-decoration: none;
+  }
+}

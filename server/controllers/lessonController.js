@@ -12,6 +12,9 @@ import Course from '../models/Course.js';
 import { generateLesson } from '../services/lessonGenerator.js';
 import { creatorOf } from '../middlewares/auth.js';
 import { resolveVideoBlocks } from '../services/youtube.js';
+import { generateLessonAudio } from '../services/audio.js';
+import { LessonAudio } from '../models/LessonAudio.js';
+import { features } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
 
@@ -145,4 +148,119 @@ export async function getLesson(req, res) {
     position: index === -1 ? null : index + 1,
     total: siblings.length,
   });
+}
+
+/**
+ * Load a lesson and prove the caller owns it, or throw.
+ *
+ * Ownership is checked through the denormalised `course` field (D31) with the
+ * creator IN THE QUERY (D28) — a findById plus a check afterwards is a
+ * different thing, and a worse one.
+ *
+ * @param {import('express').Request} req
+ * @returns {Promise<object>} the Lesson document
+ */
+async function ownedLesson(req) {
+  const lesson = await Lesson.findById(req.params.id);
+
+  if (!lesson) {
+    throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
+  }
+
+  const course = await Course.findOne({ _id: lesson.course, creator: creatorOf(req) }).select('_id');
+
+  // 404, not 403: a lesson you may not read should be indistinguishable from
+  // one that does not exist, or the response confirms it is there.
+  if (!course) {
+    throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
+  }
+
+  return lesson;
+}
+
+/**
+ * GET /api/lessons/:id/audio — stream stored narration.
+ *
+ * NEVER GENERATES, for the same reason getLesson does not: a browser
+ * revalidating, a prefetch or a link preview would each start a billed
+ * synthesis. 404 means "not made yet", and the client POSTs.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ */
+export async function getLessonAudio(req, res) {
+  await ownedLesson(req);
+
+  const audio = await LessonAudio.findOne({ lesson: req.params.id });
+
+  if (!audio) {
+    throw new ApiError(404, 'audio_not_found', 'This lesson has no narration yet.');
+  }
+
+  trace(`  audio: cache hit, ${Math.round(audio.mp3.length / 1024)}KB`);
+
+  res.set('Content-Type', 'audio/mpeg');
+  res.set('Content-Length', String(audio.mp3.length));
+  // It is derived from a lesson that rarely changes, and it is expensive.
+  res.set('Cache-Control', 'private, max-age=86400');
+
+  res.send(audio.mp3);
+}
+
+/**
+ * POST /api/lessons/:id/audio — generate the narration, then return it.
+ *
+ * Idempotent by storage: a second call returns the stored bytes rather than
+ * paying twice.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ */
+export async function generateLessonAudioContent(req, res) {
+  const startedAt = performance.now();
+
+  if (!features.tts) {
+    throw new ApiError(503, 'tts_unavailable', 'Audio narration is not configured on this server.');
+  }
+
+  const lesson = await ownedLesson(req);
+
+  // The REAL signal, not a proxy for it. A character-count guard in audio.js
+  // let an unwritten lesson through whenever its TITLE happened to be long
+  // enough, and paid to read that title aloud. `isEnriched` is what every other
+  // part of the app already uses to mean "this lesson has content".
+  if (!lesson.isEnriched) {
+    throw new ApiError(
+      400,
+      'nothing_to_narrate',
+      'This lesson has not been written yet. Write it first, then it can be read aloud.'
+    );
+  }
+
+  const existing = await LessonAudio.findOne({ lesson: lesson._id });
+
+  if (existing) {
+    trace(`  audio: "${lesson.title}" cache hit, ${Math.round(existing.mp3.length / 1024)}KB`);
+
+    res.set('Content-Type', 'audio/mpeg');
+    return res.send(existing.mp3);
+  }
+
+  const { bytes, chars } = await generateLessonAudio(lesson);
+
+  // upsert, not create: two clicks a second apart both find no audio and both
+  // generate. The unique index would make the second insert throw; upsert makes
+  // it overwrite instead, so the user gets audio rather than a 500.
+  await LessonAudio.findOneAndUpdate(
+    { lesson: lesson._id },
+    { lesson: lesson._id, mp3: bytes, chars },
+    { upsert: true, new: true }
+  );
+
+  trace(
+    `  audio: "${lesson.title}" stored ${Math.round(bytes.length / 1024)}KB, total ${Math.round(performance.now() - startedAt)}ms`
+  );
+
+  res.set('Content-Type', 'audio/mpeg');
+  res.status(201).send(bytes);
 }

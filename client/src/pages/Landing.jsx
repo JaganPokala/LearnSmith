@@ -1,4 +1,7 @@
+import { Link } from 'react-router-dom';
 import PromptForm from '../components/PromptForm.jsx';
+import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
+import { useFeatures } from '../hooks/useFeatures.js';
 
 /**
  * The public landing page — the "Console" direction, dark throughout.
@@ -64,6 +67,29 @@ const STEPS = [
   },
 ];
 
+/**
+ * The Hinglish sample, shown rather than described. It is a real round trip
+ * through the translator's own rules: Roman script, code-mixed, and every
+ * technical term left in English because that is how they are said out loud.
+ */
+const HINGLISH_SAMPLE = {
+  en: 'The engine converts chemical energy into thrust.',
+  hi: 'Engine chemical energy ko thrust mein convert karta hai.',
+};
+
+/**
+ * A still waveform for the mock player. Hard-coded rather than random: a
+ * re-render must not reshuffle it, and a decorative strip is not worth a seeded
+ * PRNG. Bars before PLAYED are drawn in accent and the rest muted, so it reads
+ * as audio mid-playback at a glance instead of as a bar chart.
+ */
+const WAVE = [
+  26, 44, 32, 60, 76, 50, 38, 64, 86, 69, 47, 31, 56, 78,
+  93, 72, 53, 36, 45, 66, 84, 60, 42, 28, 50, 71, 39, 25,
+];
+
+const PLAYED = 0.42;
+
 /** The cyan bloom behind the headline. */
 const GLOW = {
   background:
@@ -90,25 +116,86 @@ const HEADLINE_GLOW = {
 const ACCENT_GLOW = { textShadow: '0 0 34px rgba(34,211,238,.72)' };
 
 export default function LandingPage() {
+  const { isAuthenticated, isLoading, user, loginWithRedirect, logout } = useAuth();
+
+  // The same flag the lesson page gates AudioPlayer on. Narration needs an
+  // OpenAI key on the server, so a deployment without one must not be sold
+  // narration — every mention of Hinglish on this page hangs off this.
+  const features = useFeatures();
+
+  // The two capabilities nobody expects are the two worth linking: a chip that
+  // scrolls to the panel demonstrating it beats a sentence claiming it.
+  const chips = [
+    { label: 'no signup to try' },
+    { label: 'outline in ~7s' },
+    ...(features.tts ? [{ label: '▶ hinglish audio', href: '#capabilities' }] : []),
+    { label: '⇩ save as pdf', href: '#capabilities' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#0a0c0f] text-[#c9d1da]">
       {/* ───────────────────── NAV ───────────────────── */}
-      <nav className="flex items-center gap-6 border-b border-[#191f26] px-5 py-4 sm:px-8">
+      <nav className="flex items-center gap-4 border-b border-[#191f26] px-5 py-4 sm:gap-6 sm:px-8">
         <span className="font-mono text-[15px] font-bold tracking-[-0.03em] text-glow">
           text-to-learn
         </span>
 
-        {/* Hidden on a phone: three items in a 375px bar leaves no room for the
-            one that matters. */}
+        {/* Section links start at sm. A phone loses nothing by them being
+            absent — the form they point past is the first thing on the page —
+            and the auth control is what that space is for instead.
+
+            All three sit at sm rather than one of them waiting for md: the old
+            "Generate a course" CTA was ~150px of the bar, and without it a
+            640px nav fits the wordmark, three links and a button with room
+            over. */}
         <a href="#how" className="hidden text-[14.5px] text-[#8b95a1] hover:text-white sm:block">
           How it works
         </a>
 
+        <a
+          href="#capabilities"
+          className="hidden text-[14.5px] text-[#8b95a1] hover:text-white sm:block"
+        >
+          Features
+        </a>
+
+        <Link
+          to="/courses"
+          className="hidden text-[14.5px] text-[#8b95a1] hover:text-white sm:block"
+        >
+          My courses
+        </Link>
+
         <span className="flex-1" />
 
-        <a href="#generate" className="bg-glow px-4 py-2 text-[14px] font-semibold text-[#0a0c0f]">
-          Generate a course
-        </a>
+        {/* Never hidden at any width. Sign out used to be sm:block, which on a
+            phone left a signed-in reader with no way out of the account at all.
+
+            The two states are weighted differently on purpose. Signed out, this
+            is the only action in the bar, so it is a button — but a bordered one
+            rather than a filled one, because the page promises "no signup to
+            try" three lines below and a loud Sign in would contradict it.
+            Signed in, it is bookkeeping, so it goes quiet. */}
+        {AUTH_ENABLED && !isLoading && (
+          isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+              title={user?.email ?? ''}
+              className="shrink-0 text-[14.5px] text-[#8b95a1] hover:text-white"
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => loginWithRedirect()}
+              className="shrink-0 border border-accent-line bg-accent-bg px-[14px] py-[7px] text-[14px] font-semibold text-glow hover:border-glow hover:bg-raised"
+            >
+              Sign in
+            </button>
+          )
+        )}
       </nav>
 
       {/* ───────────────────── HERO ───────────────────── */}
@@ -143,16 +230,45 @@ export default function LandingPage() {
 
           <p className="mx-auto mb-8 max-w-[56ch] text-[17px] leading-[1.6] text-[#93a0ad]">
             One line of text becomes a structured syllabus — ordered modules, written lessons,
-            code where it helps, and quizzes that explain their answers.
+            code where it helps, and quizzes that explain their answers.{' '}
+            {features.tts
+              ? 'Listen to any lesson in Hinglish, or save it as a PDF and read it on paper.'
+              : 'Save any lesson as a PDF and read it on paper.'}
           </p>
 
-          {/* The real form. `id` is what the nav button scrolls to. */}
-          <div id="generate" className="mx-auto max-w-[520px] scroll-mt-20 text-left">
+          {/* The real form. No id and no scroll-mt any more: both existed only
+              for the nav CTA that used to scroll down to this, and the form is
+              now the first thing on the page regardless. */}
+          <div className="mx-auto max-w-[520px] text-left">
             <PromptForm variant="hero" />
           </div>
 
-          <p className="mt-4 font-mono text-[12px] text-[#5c6773]">
-            no signup to try · outline in ~7s
+          <div className="mt-[18px] flex flex-wrap items-center justify-center gap-2">
+            {chips.map(({ label, href }) =>
+              href ? (
+                <a
+                  key={label}
+                  href={href}
+                  className="border border-[#1e2730] bg-[#0d1116] px-[11px] py-[5px] font-mono text-[12px] text-[#93a0ad] hover:border-accent hover:text-glow"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span
+                  key={label}
+                  className="border border-[#161c23] px-[11px] py-[5px] font-mono text-[12px] text-[#5c6773]"
+                >
+                  {label}
+                </span>
+              ),
+            )}
+          </div>
+
+          <p className="mt-5 text-[14.5px] text-[#8b95a1]">
+            Already made some?{' '}
+            <Link to="/courses" className="text-glow underline underline-offset-4 hover:text-white">
+              Open your library
+            </Link>
           </p>
         </div>
       </div>
@@ -181,7 +297,10 @@ export default function LandingPage() {
       </div>
 
       {/* ───────────────────── FEATURES ───────────────────── */}
-      <section className="border-b border-[#191f26] px-5 py-14 sm:px-8 sm:py-[62px]">
+      <section
+        id="features"
+        className="scroll-mt-16 border-b border-[#191f26] px-5 py-14 sm:px-8 sm:py-[62px]"
+      >
         <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-glow">
           What you get
         </p>
@@ -207,6 +326,166 @@ export default function LandingPage() {
               <p className="m-0 text-[15px] leading-[1.62] text-[#87919d]">{feature.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ───────────────────── CAPABILITIES ─────────────────────
+          Two panels, not two more cards in the grid above. Both of these act on
+          a lesson that already exists, both are the reason to pick this over a
+          chat window, and neither survives being compressed into three lines
+          beside five siblings.
+
+          Each panel is copy on top and a mock of the real interface below. The
+          mocks are aria-hidden: they are pictures of a UI, and a screen reader
+          reading out a fake waveform helps nobody. */}
+      <section
+        id="capabilities"
+        className="scroll-mt-16 border-b border-[#191f26] px-5 py-14 sm:px-8 sm:py-[62px]"
+      >
+        <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-glow">
+          Once a lesson is written
+        </p>
+        <h2 className="m-0 mb-[10px] text-[32px] font-bold tracking-[-0.028em] text-[#f2f6f9]">
+          {features.tts ? 'Hear it. Or take it with you.' : 'Take it with you.'}
+        </h2>
+        <p className="m-0 mb-8 max-w-[58ch] text-[16.5px] leading-[1.6] text-[#8b95a1]">
+          A written lesson is not the end of it.{' '}
+          {features.tts
+            ? 'Any lesson can be narrated in Hinglish or saved as a PDF'
+            : 'Any lesson can be saved as a PDF'}{' '}
+          — no plugin, no export queue, no second tool.
+        </p>
+
+        {/* One column when narration is off, so a lone panel is not stranded at
+            half width beside an empty cell. */}
+        <div
+          className={`grid gap-px border border-[#191f26] bg-[#191f26] ${
+            features.tts ? 'lg:grid-cols-2' : ''
+          }`}
+        >
+          {features.tts && (
+            <div className="bg-[#0d1116] px-5 py-[26px] sm:px-7">
+              <div className="mb-3 font-mono text-[12px] uppercase tracking-[0.13em] text-glow">
+                listen · hinglish
+              </div>
+
+              <h3 className="m-0 mb-[10px] text-[21px] font-semibold tracking-[-0.02em] text-[#e8edf2]">
+                Explained the way it would be said out loud
+              </h3>
+
+              <p className="m-0 mb-5 text-[15.5px] leading-[1.62] text-[#87919d]">
+                The lesson is translated into spoken Hinglish — Roman script, code-mixed, the
+                register an Indian teacher actually uses with one student. Technical terms stay
+                in English, because nobody says them any other way.
+              </p>
+
+              {/* One line of English and the line it becomes. That pair is the
+                  entire pitch, and no paragraph about it lands as hard. */}
+              <div aria-hidden="true" className="mb-4 border border-[#1b222a] bg-[#0a0d11]">
+                <div className="border-b border-[#1b222a] px-[13px] py-[10px]">
+                  <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-[#5c6773]">
+                    lesson
+                  </span>
+                  <p className="m-0 mt-[5px] text-[14px] leading-[1.5] text-[#7c8894]">
+                    {HINGLISH_SAMPLE.en}
+                  </p>
+                </div>
+
+                <div className="px-[13px] py-[10px]">
+                  <span className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-glow">
+                    narration
+                  </span>
+                  <p className="m-0 mt-[5px] text-[14px] leading-[1.5] text-[#dce4ec]">
+                    {HINGLISH_SAMPLE.hi}
+                  </p>
+                </div>
+              </div>
+
+              {/* The player, mid-playback. */}
+              <div
+                aria-hidden="true"
+                className="flex items-center gap-3 border border-[#1b222a] bg-[#0a0d11] px-[13px] py-[11px]"
+              >
+                <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center bg-glow text-[10px] text-[#0a0c0f]">
+                  ▶
+                </span>
+
+                <span className="flex h-[30px] min-w-0 flex-1 items-center gap-[2px]">
+                  {WAVE.map((h, i) => (
+                    <span
+                      key={i}
+                      className={`flex-1 ${i / WAVE.length < PLAYED ? 'bg-glow' : 'bg-[#2a343e]'}`}
+                      style={{ height: `${h}%` }}
+                    />
+                  ))}
+                </span>
+
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-[#5c6773]">
+                  1:04
+                </span>
+              </div>
+
+              <p className="m-0 mt-[11px] font-mono text-[11.5px] leading-[1.55] text-[#5c6773]">
+                recorded once in ~25s, then saved · every replay after that is instant
+              </p>
+            </div>
+          )}
+
+          <div className="bg-[#0d1116] px-5 py-[26px] sm:px-7">
+            <div className="mb-3 font-mono text-[12px] uppercase tracking-[0.13em] text-glow">
+              export · pdf
+            </div>
+
+            <h3 className="m-0 mb-[10px] text-[21px] font-semibold tracking-[-0.02em] text-[#e8edf2]">
+              A lesson that survives leaving the browser
+            </h3>
+
+            <p className="m-0 mb-5 text-[15.5px] leading-[1.62] text-[#87919d]">
+              One click hands the lesson to your print dialog already typeset for paper — the
+              dark theme swapped for ink on white, the rail and the player gone. Choose
+              “Save as PDF” and you get real selectable, searchable text, not a screenshot of
+              a web page.
+            </p>
+
+            {/* Actual paper against the dark panel. The inversion IS the
+                feature, so the mock is the argument. */}
+            <div
+              aria-hidden="true"
+              className="mb-4 bg-white px-[18px] py-[16px] text-[#0d1114] shadow-[0_18px_44px_rgba(0,0,0,.5)]"
+            >
+              <div className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-[#626c76]">
+                Rocket Propulsion / Module 2 / lesson 3 of 5
+              </div>
+
+              <div className="mb-[10px] mt-[7px] text-[15px] font-bold tracking-[-0.02em]">
+                How a Rocket Engine Makes Thrust
+              </div>
+
+              <p className="m-0 mb-[10px] text-[9px] leading-[1.7] text-[#232c34]">
+                A rocket engine burns propellant in a combustion chamber and accelerates the
+                resulting gas through a nozzle. The engine pushes the gas backwards, and the gas
+                pushes the engine forwards by exactly as much.
+              </p>
+
+              <div className="mb-[10px] border-l-2 border-[#a8d4de] bg-[#f1fafc] px-[8px] py-[6px] font-mono text-[8px] leading-[1.6] text-[#0a5163]">
+                thrust = mass_flow × exhaust_velocity
+              </div>
+
+              <div className="flex flex-col gap-[5px]">
+                <span className="h-[3px] w-full bg-[#e3e7eb]" />
+                <span className="h-[3px] w-full bg-[#e3e7eb]" />
+                <span className="h-[3px] w-[62%] bg-[#e3e7eb]" />
+              </div>
+
+              <div className="mt-[13px] border-t border-[#d7dce2] pt-[6px] text-right font-mono text-[7.5px] text-[#626c76]">
+                1 / 2
+              </div>
+            </div>
+
+            <p className="m-0 font-mono text-[11.5px] leading-[1.55] text-[#5c6773]">
+              headings never strand at a page foot · code blocks are never cut in half
+            </p>
+          </div>
         </div>
       </section>
 
@@ -240,9 +519,23 @@ export default function LandingPage() {
           <span className="font-mono text-[15px] font-bold tracking-[-0.03em] text-glow">
             text-to-learn
           </span>
-          <span className="font-mono text-[12px] text-[#5d6b7a] sm:text-[13px]">
-            all courses generated on demand · verify before you rely on them
-          </span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Link to="/courses" className="font-mono text-[12px] text-[#8b95a1] hover:text-glow sm:text-[13px]">
+              my courses
+            </Link>
+            <a
+              href="#capabilities"
+              className="font-mono text-[12px] text-[#8b95a1] hover:text-glow sm:text-[13px]"
+            >
+              hinglish &amp; pdf
+            </a>
+            <a href="#how" className="font-mono text-[12px] text-[#8b95a1] hover:text-glow sm:text-[13px]">
+              how it works
+            </a>
+            <span className="font-mono text-[12px] text-[#5d6b7a] sm:text-[13px]">
+              generated on demand · verify before you rely on them
+            </span>
+          </div>
         </div>
       </footer>
     </div>

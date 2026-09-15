@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, Link } from 'react-router-dom';
 import { useCourse } from '../hooks/useCourse.js';
 import { timeAgo } from '../lib/formatDate.js';
 import MetaBar from '../components/MetaBar.jsx';
@@ -124,7 +124,13 @@ export default function CoursePage() {
 
   return (
     <>
-      <p className="mb-[9px] font-mono text-meta text-mute">courses / {course.title}</p>
+      <p className="mb-[9px] font-mono text-meta text-mute">
+        <Link to="/courses" className="hover:text-accent">
+          courses
+        </Link>
+        {' / '}
+        {course.title}
+      </p>
 
       <h1 className="mb-[5px] text-title font-bold tracking-[-0.022em]">{course.title}</h1>
 

@@ -31,10 +31,32 @@ export default function Sidebar({ children, onClose }) {
         </button>
       </div>
 
+      <nav className="mb-6 flex flex-col">
+        <NavLink
+          to="/courses"
+          end
+          className={({ isActive }) =>
+            [
+              'block border-l-2 px-3 py-[7px] text-base',
+              isActive
+                ? 'border-glow bg-raised text-glow'
+                : 'border-transparent text-dim hover:bg-raised hover:text-ink',
+            ].join(' ')
+          }
+        >
+          My courses
+        </NavLink>
+
+        <Link
+          to="/"
+          className="block border-l-2 border-transparent px-3 py-[7px] text-base text-dim hover:bg-raised hover:text-ink"
+        >
+          New course
+        </Link>
+      </nav>
+
       {children}
 
-      {/* App chrome, not page content, so it is rendered here rather than
-          passed through the rail slot — every page wants the same one. */}
       <AccountBlock />
     </aside>
   );

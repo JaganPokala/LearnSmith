@@ -11,6 +11,7 @@ import { describeError } from '../lib/errors.js';
 import { stripEchoedTitle } from '../lib/lessonBody.js';
 import RetryButton from '../components/RetryButton.jsx';
 import { useAuth } from '../lib/auth.js';
+import { useFeatures } from '../hooks/useFeatures.js';
 
 /**
  * One measure for the whole article. The objectives box, the skeleton and the
@@ -40,6 +41,7 @@ export default function LessonPage() {
   // Held until auth settles, for the same reason as the course page: a
   // tokenless reload of your own lesson is a 404.
   const { isLoading: authLoading } = useAuth();
+  const features = useFeatures();
 
   const { data, loading, error, applyGeneratedLesson } = useLesson(lessonId, !authLoading);
   const { run, pendingId, failure, reset } = useGenerateLesson();
@@ -123,6 +125,39 @@ export default function LessonPage() {
   const { lesson, course, module, position, total } = data;
 
   const body = stripEchoedTitle(lesson.content, lesson.title);
+
+  const siblings = data.siblings ?? [];
+  const here = siblings.findIndex((s) => String(s._id) === String(lesson._id));
+  const prev = here > 0 ? siblings[here - 1] : null;
+  const next = here >= 0 && here < siblings.length - 1 ? siblings[here + 1] : null;
+
+  const stepLink = 'flex min-w-0 flex-1 flex-col gap-[3px] border border-line bg-panel px-[13px] py-[10px] hover:border-accent';
+  const stepLabel = 'font-mono text-xs uppercase tracking-[0.12em] text-mute';
+
+  const steps = (prev || next) && (
+    <nav className="mt-7 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row print:hidden">
+      {prev ? (
+        <Link to={`/lessons/${prev._id}`} className={stepLink}>
+          <span className={stepLabel}>← previous</span>
+          <span className="truncate text-base text-ink">{prev.title}</span>
+        </Link>
+      ) : (
+        <span className="hidden flex-1 sm:block" />
+      )}
+
+      {next ? (
+        <Link to={`/lessons/${next._id}`} className={`${stepLink} sm:text-right`}>
+          <span className={stepLabel}>next →</span>
+          <span className="truncate text-base text-ink">{next.title}</span>
+        </Link>
+      ) : (
+        <Link to={`/courses/${course?._id}`} className={`${stepLink} sm:text-right`}>
+          <span className={stepLabel}>module complete</span>
+          <span className="truncate text-base text-ink">Back to {course?.title}</span>
+        </Link>
+      )}
+    </nav>
+  );
 
   // Shown in all three remaining states, so it sits above the branch. It is the
   // reason the twelve-second wait is tolerable: the user is looking at a real
@@ -238,7 +273,7 @@ export default function LessonPage() {
       {/* Keyed so a move between sibling lessons REMOUNTS it. Without the
           key the component is reused, and it would show the previous lesson's
           recording under the new lesson's title — F3 all over again, in audio. */}
-      <AudioPlayer key={lessonId} lessonId={lessonId} />
+      {features.tts && <AudioPlayer key={lessonId} lessonId={lessonId} />}
 
       {/* Nothing at all when the array is empty — an empty labelled box looks
           like a rendering bug. */}
@@ -259,6 +294,8 @@ export default function LessonPage() {
       )}
 
         <LessonRenderer blocks={body} />
+
+        {steps}
       </div>
     </>
   );

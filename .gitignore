@@ -18,5 +18,10 @@ Thumbs.db
 .idea/
 *.md
 
+# ...except the one that is meant to be read on GitHub. The rule above keeps the
+# local build journals (PLAN, DECISIONS, FAILURES, QUESTIONS, IDEAS, API) out of
+# the repo; this exception is what lets the README in.
+!/README.md
+
 # The source brief. Kept locally, not in the repo.
 Hackathon Roadmap.docx

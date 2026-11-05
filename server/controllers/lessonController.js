@@ -16,7 +16,14 @@ import { generateLessonAudio } from '../services/audio.js';
 import { LessonAudio } from '../models/LessonAudio.js';
 import { features } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
-import { trace } from '../middlewares/trace.js';
+import { trace, traceError } from '../middlewares/trace.js';
+
+import {
+  claimLessonGeneration,
+  completeLessonGeneration,
+  failLessonGeneration,
+} from '../services/lessonGenerationState.js';
+
 
 /**
  * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
@@ -30,74 +37,137 @@ import { trace } from '../middlewares/trace.js';
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */
-export async function generateLessonContent(req, res) {
-  const startedAt = performance.now();
 
-  // A malformed id throws CastError -> 400 invalid_id, handled centrally.
-  const lesson = await Lesson.findById(req.params.id);
+export function createGenerateLessonContent({
+    generate = generateLesson,
+    resolveVideos = resolveVideoBlocks,
+  } = {}) {
+    return async function generateLessonContent(req, res) {
+    const startedAt = performance.now();
 
-  if (!lesson) {
-    throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
-  }
+    // A malformed id throws CastError -> 400 invalid_id, handled centrally.
+    const lesson = await Lesson.findById(req.params.id);
 
-  // OWNERSHIP, on the denormalised `course` field — one indexed lookup instead
-  // of walking module -> course. The module is needed only for its title, which
-  // is context for the generator, so both run in parallel.
-  const [course, module] = await Promise.all([
-    Course.findOne({ _id: lesson.course, creator: creatorOf(req) }),
-    Module.findById(lesson.module),
-  ]);
+    if (!lesson) {
+      throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
+    }
 
-  // Same 404 for "no such lesson", "orphaned" and "not yours" — which one it
-  // was is ours to debug, not the caller's to learn.
-  if (!course || !module) {
-    throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
-  }
+    // OWNERSHIP, on the denormalised `course` field — one indexed lookup instead
+    // of walking module -> course. The module is needed only for its title, which
+    // is context for the generator, so both run in parallel.
+    const [course, module] = await Promise.all([
+      Course.findOne({ _id: lesson.course, creator: creatorOf(req) }),
+      Module.findById(lesson.module),
+    ]);
 
-  // isEnriched, NOT content.length: a generation that legitimately produced
-  // zero blocks would be retried forever by a length check.
-  if (lesson.isEnriched) {
-    trace(
-      `  lesson: "${lesson.title}" cache hit, ${Math.round(performance.now() - startedAt)}ms, ${lesson.content.length} blocks`
-    );
+    // Same 404 for "no such lesson", "orphaned" and "not yours" — which one it
+    // was is ours to debug, not the caller's to learn.
+    if (!course || !module) {
+      throw new ApiError(404, 'lesson_not_found', `No lesson with id ${req.params.id}.`);
+    }
 
-    return res.json(lesson);
-  }
+    // isEnriched, NOT content.length: a generation that legitimately produced
+    // zero blocks would be retried forever by a length check.
+    if (lesson.isEnriched) {
+      trace(
+        `  lesson: "${lesson.title}" cache hit, ${Math.round(performance.now() - startedAt)}ms, ${lesson.content.length} blocks`
+      );
 
-  // Course and module titles as well as the lesson's — without them the model
-  // guesses, confidently, what level it is writing for.
-  // Errors from here are already typed ApiErrors, so no catch.
-  const { lesson: generated, ms } = await generateLesson({
-    courseTitle: course.title,
-    moduleTitle: module.title,
-    lessonTitle: lesson.title,
-  });
+      return res.json(lesson);
+    }
 
-  // ASSIGN THE WHOLE ARRAY. Mongoose cannot see mutations inside a Mixed field,
-  // so `lesson.content[0].text = 'x'` saves nothing and throws nothing.
-  // isEnriched last, or a failed save leaves a lesson marked generated but empty.
-  // Video queries become real video ids HERE, once, before the lesson is
-  // stored — never on read. A search costs 100 of 10,000 daily quota units, so
-  // resolving per view would spend the day's budget on repeat visits to the
-  // same lesson. Resolved ids live in the block and every later read is free.
-  //
-  // Cannot throw: a lesson whose lookup failed keeps its query and renders the
-  // search link, exactly as it does today.
-  lesson.content = await resolveVideoBlocks(generated.content);
-  lesson.objectives = generated.objectives;
-  lesson.isEnriched = true;
+    const claim = await claimLessonGeneration(lesson._id, course._id);
 
-  await lesson.save();
+    if (!claim) {
+      // Another request may have finished after our initial cache check.
+      const latest = await Lesson.findOne({
+        _id: lesson._id,
+        course: course._id,
+      });
 
-  // Block and mcq counts are what reveal lessons getting thinner as prompts change.
-  const mcqCount = lesson.content.filter((block) => block.type === 'mcq').length;
+      if (!latest) {
+        throw new ApiError(
+          404,
+          'lesson_not_found',
+          'This lesson no longer exists.',
+        );
+      }
 
-  trace(
-    `  lesson: "${lesson.title}" generated in ${ms}ms, total ${Math.round(performance.now() - startedAt)}ms, ${lesson.content.length} blocks, ${mcqCount} mcqs`
-  );
+      if (latest.isEnriched) {
+        return res.json(latest);
+      }
 
-  res.json(lesson);
+      throw new ApiError(
+        409,
+        'generation_in_progress',
+        'This lesson is already being generated. Try again shortly.',
+      );
+    }
+
+    const { attemptId } = claim;
+
+    try {
+      // const { lesson: generated, ms } = await generateLesson({
+      //   courseTitle: course.title,
+      //   moduleTitle: module.title,
+      //   lessonTitle: claim.lesson.title,
+      // });
+
+      const { lesson: generated, ms } = await generate({
+        courseTitle: course.title,
+        moduleTitle: module.title,
+        lessonTitle: claim.lesson.title,
+      });
+
+      // const content = await resolveVideoBlocks(generated.content);
+
+      const content = await resolveVideos(generated.content);
+
+      const saved = await completeLessonGeneration({
+        lessonId: lesson._id,
+        courseId: course._id,
+        attemptId,
+        content,
+        objectives: generated.objectives,
+      });
+
+      if (!saved) {
+        throw new ApiError(
+          409,
+          'generation_claim_lost',
+          'This generation attempt expired or was replaced. Reload the lesson.',
+        );
+      }
+
+      trace(
+        `lesson=${lesson._id} attempt=${attemptId} generated in ${ms}ms`,
+      );
+
+      return res.json(saved);
+    } catch (err) {
+      try {
+        await failLessonGeneration({
+          lessonId: lesson._id,
+          courseId: course._id,
+          attemptId,
+        });
+      } catch (cleanupError) {
+        // Preserve the original failure.
+        // If cleanup fails, lease expiration still permits recovery.
+        traceError(
+          `Generation cleanup failed: lesson=${lesson._id} ` +
+          `attempt=${attemptId} error=${cleanupError.message}`,
+        );
+      }
+
+      throw err;
+    }
+  };
 }
+
+export const generateLessonContent = createGenerateLessonContent();
+
+
 
 /**
  * GET /api/lessons/:id — the lesson plus the context the page frames it with:

@@ -32,12 +32,28 @@ const lessonSchema = new mongoose.Schema(
       },
     ],
 
+    generationStatus: {
+      type: String,
+      enum: ['pending', 'generating', 'ready', 'failed'],
+      default: 'pending',
+    },
     // The lazy-generation flag. A flag rather than content.length === 0: a
     // generation that legitimately produced zero blocks would retry forever.
     isEnriched: {
       type: Boolean,
       default: false,
     },
+
+    generationAttemptId: {
+      type: String,
+      default: null,
+    },
+
+    generationLeaseExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    //is this same as timeout ?? 
 
     module: {
       type: mongoose.Schema.Types.ObjectId,

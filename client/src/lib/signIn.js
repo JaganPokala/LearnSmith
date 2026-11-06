@@ -6,7 +6,7 @@ export function safeReturnTo(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\') || /\p{Cc}/u.test(value)) return '/courses';
   try {
     const url = new URL(value, 'https://learnsmith.invalid');
-    if (url.origin !== 'https://learnsmith.invalid' || !/^\/(?:courses(?:\/[^/]+)?|lessons\/[^/]+)?$/u.test(url.pathname)) return '/courses';
+    if (url.origin !== 'https://learnsmith.invalid' || !/^\/(?:billing|courses(?:\/[^/]+)?|lessons\/[^/]+)?$/u.test(url.pathname)) return '/courses';
     return `${url.pathname}${url.search}${url.hash}`;
   } catch { return '/courses'; }
 }

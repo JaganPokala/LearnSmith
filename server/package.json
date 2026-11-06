@@ -10,6 +10,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "setup:billing": "node scripts/setupBilling.js",
+    "check:billing": "node scripts/checkBilling.js",
     "verify:generation": "node scripts/verifyGeneration.js",
     "verify:quota": "node scripts/verifyQuota.js",
     "verify:controllers": "node scripts/verifyGenerationController.js",
@@ -18,7 +20,10 @@
     "verify:audio": "node scripts/verifyAudio.js",
     "verify:lesson-lease": "node scripts/verifyLessonLease.js",
     "verify:learning": "node scripts/verifyLearning.js",
-    "verify:course-context": "node scripts/verifyLessonCourseContext.js"
+    "verify:course-context": "node scripts/verifyLessonCourseContext.js",
+    "verify:billing": "node scripts/verifyBilling.js",
+    "verify:billing-unit": "node scripts/verifyBillingUnit.js",
+    "verify:billing-modes": "node scripts/verifyBillingModes.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

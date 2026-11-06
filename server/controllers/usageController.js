@@ -1,11 +1,11 @@
 import DailyUsage from '../models/DailyUsage.js';
 import GenerationCall from '../models/GenerationCall.js';
 import { creatorOf } from '../middlewares/auth.js';
-import { getDailyLimits } from '../config/usageLimits.js';
+import { getEntitlement } from '../services/entitlementService.js';
 
 export async function getUsage(req, res) {
   const creator = creatorOf(req);
-  const limits = getDailyLimits(req.identityType);
+  const { limits, tier, expiresAt } = await getEntitlement({ creator, identityType: req.identityType });
   const day = new Date().toISOString().slice(0, 10);
   const start = new Date(`${day}T00:00:00.000Z`);
   const end = new Date(start);
@@ -63,7 +63,7 @@ export async function getUsage(req, res) {
 
   res.set('Cache-Control', 'private, no-store');
   res.json({
-    day, resetAt: end.toISOString(), quota,
+    day, resetAt: end.toISOString(), quota, tier, entitlementExpiresAt: expiresAt,
     generation: summary('text', 'course_and_lesson_text'),
     audio: summary('audio', 'audio_translation_and_speech'),
   });

@@ -24,14 +24,16 @@ function AccountUsageProvider({ ready, children }) {
   }, [ready, store]);
 
   const resetAt = snapshot.data?.resetAt;
+  const expiresAt = snapshot.data?.entitlementExpiresAt;
   useEffect(() => {
     if (!ready || !resetAt) return undefined;
-    const delay = new Date(resetAt).getTime() - Date.now();
+    const dates = [resetAt, expiresAt].filter(Boolean).map((value) => new Date(value).getTime()).filter(Number.isFinite);
+    const delay = Math.min(...dates) - Date.now();
     if (!Number.isFinite(delay)) return undefined;
     // Re-read server state after its UTC reset; never reset counters locally.
     const timer = setTimeout(store.refresh, Math.max(1000, delay + 1000));
     return () => clearTimeout(timer);
-  }, [ready, resetAt, store]);
+  }, [ready, resetAt, expiresAt, store]);
 
   return (
     <UsageContext.Provider value={{ ...snapshot, ready, refresh: store.refresh }}>

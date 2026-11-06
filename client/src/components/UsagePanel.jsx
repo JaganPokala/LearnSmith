@@ -18,7 +18,7 @@ export default function UsagePanel({ compact = false }) {
     <section aria-label="Daily generation allowance" aria-busy={pending || !ready} className="mb-6 border border-line bg-panel p-3 text-left print:hidden sm:p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-mono text-xs uppercase tracking-[0.1em] text-dim">
-          Daily allowance <span className="text-mute">· {ready ? (isAuthenticated ? 'Free account' : 'Guest') : 'Checking account'}</span>
+          Daily allowance <span className="text-mute">· {ready ? (isAuthenticated ? !data ? 'Account' : data.tier === 'pro' ? 'Pro · test' : 'Free account' : 'Guest') : 'Checking account'}</span>
         </h2>
         <button type="button" onClick={refresh} disabled={pending || !ready} className="text-xs text-glow hover:underline disabled:cursor-wait disabled:text-mute">
           {pending ? 'Updating…' : 'Refresh allowance'}

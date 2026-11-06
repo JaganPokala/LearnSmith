@@ -5,8 +5,9 @@ import { createBurstLimiters } from '../middlewares/burstLimits.js';
 
 async function verify() {
   // Small limits make the tests fast. No MongoDB or provider is involved.
-  const { sessionLimiter, generationLimiter, learningWriteLimiter } = createBurstLimiters({
+  const { sessionLimiter, generationLimiter, learningWriteLimiter, billingWriteLimiter, billingWebhookLimiter } = createBurstLimiters({
     windowMs: 60_000, sessionsPerIp: 2, generationRequestsPerIdentity: 2, learningWritesPerIdentity: 2,
+    billingWritesPerIdentity: 2, billingWebhooksPerIp: 2,
   });
   const app = express();
   app.use(express.json());
@@ -44,6 +45,11 @@ async function verify() {
   app.post('/api/lessons/:id/visit', learningWriteLimiter, (req, res) => res.json({ saved: true }));
   app.put('/api/lessons/:id/progress', learningWriteLimiter, (req, res) => res.json({ saved: true }));
   app.post('/api/lessons/:id/quiz-attempts', learningWriteLimiter, (req, res) => res.json({ saved: true }));
+  app.post('/api/billing/checkout', billingWriteLimiter, (req, res) => res.json({ checkout: true }));
+  app.post('/api/billing/verify', billingWriteLimiter, (req, res) => res.json({ checked: true }));
+  app.post('/api/billing/cancel', billingWriteLimiter, (req, res) => res.json({ cancelled: true }));
+  app.post('/api/billing/webhook', billingWebhookLimiter, (req, res) => res.json({ received: true }));
+  app.get('/api/billing/status', (req, res) => res.json({ readable: true }));
   app.post('/test/missing-identity', generationLimiter, generate);
   app.use((err, req, res, next) => {
     res.status(500).json({ error: { message: err.message } });
@@ -78,6 +84,17 @@ async function verify() {
     assert.equal(quotaCalls, 0);
     assert.equal(generatorCalls, 0);
     console.log('PASS: Learning writes share their own identity bucket without consuming generation admission or quota.');
+
+    assert.equal((await request('/api/billing/checkout')).status, 200);
+    assert.equal((await request('/api/billing/verify')).status, 200);
+    assert.equal((await request('/api/billing/cancel')).status, 429);
+    assert.equal((await request('/api/billing/status', { method: 'GET' })).status, 200);
+    assert.equal((await request('/api/billing/webhook')).status, 200);
+    assert.equal((await request('/api/billing/webhook')).status, 200);
+    assert.equal((await request('/api/billing/webhook')).status, 429);
+    assert.equal(quotaCalls, 0);
+    assert.equal(generatorCalls, 0);
+    console.log('PASS: Billing actions and webhook deliveries have separate burst buckets; status reads and generation admission remain independent.');
 
     assert.equal((await request('/api/courses/generate')).status, 201);
     assert.equal((await request('/api/lessons/example/generate')).status, 201);

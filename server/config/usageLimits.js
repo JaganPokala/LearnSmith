@@ -1,3 +1,5 @@
+export const PRO_DAILY_LIMITS = Object.freeze({ courses: 10, lessons: 50, audio: 20 });
+
 const LIMITS = {
   guest: Object.freeze({
     courses: 1,
@@ -10,15 +12,17 @@ const LIMITS = {
     lessons: 20,
     audio: 10,
   }),
+  pro: PRO_DAILY_LIMITS,
 };
 
-export function getDailyLimits(identityType) {
+export function getDailyLimits(identityType, tier = 'free') {
   if (identityType === 'guest') {
     return LIMITS.guest;
   }
 
   if (identityType === 'user') {
-    return LIMITS.free;
+    if (!['free', 'pro'].includes(tier)) throw new Error('Unknown account tier.');
+    return LIMITS[tier];
   }
 
   throw new Error('Cannot select limits for an unknown identity type.');

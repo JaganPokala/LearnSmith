@@ -7,6 +7,7 @@ import { config as loadDotenv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { validBillingKey } from './billingMode.js';
 
 // Built from THIS FILE's location, not process.cwd(). `npm start` runs with
 // cwd = server/, but Render's start command may launch from elsewhere — a
@@ -51,6 +52,11 @@ const SPEC = [
   { key: 'YOUTUBE_API_KEY', secret: true, warn: 'lesson videos (Phase 9) will not work' },
   { key: 'AUTH0_ISSUER', warn: 'authentication (Phase 8) will not work' },
   { key: 'AUTH0_AUDIENCE', warn: 'authentication (Phase 8) will not work' },
+  { key: 'RAZORPAY_MODE', fallback: 'test' },
+  { key: 'RAZORPAY_KEY_ID' },
+  { key: 'RAZORPAY_KEY_SECRET', secret: true },
+  { key: 'RAZORPAY_PLAN_ID' },
+  { key: 'RAZORPAY_WEBHOOK_SECRET', secret: true },
 ];
 
 /**
@@ -222,6 +228,9 @@ export const features = Object.freeze({
 
   video: Boolean(config.YOUTUBE_API_KEY),
   auth: Boolean(config.AUTH0_ISSUER && config.AUTH0_AUDIENCE),
+  billing: Boolean(config.AUTH0_ISSUER && config.AUTH0_AUDIENCE &&
+    validBillingKey(config.RAZORPAY_MODE, config.RAZORPAY_KEY_ID) && config.RAZORPAY_KEY_SECRET &&
+    /^plan_[A-Za-z0-9]+$/.test(config.RAZORPAY_PLAN_ID ?? '') && config.RAZORPAY_WEBHOOK_SECRET?.length >= 24),
 });
 
 /**

@@ -12,6 +12,7 @@ import { api } from './lib/api.js';
 import AuthProvider from './components/AuthProvider.jsx';
 import UsageProvider from './components/UsageProvider.jsx';
 import LessonRoute from './components/LessonRoute.jsx';
+import BillingPage from './pages/Billing.jsx';
 
 // Render's free tier spins the API down after ~15 minutes idle, and the next
 // request pays the cold start. Firing this at module load — before React even
@@ -58,6 +59,7 @@ createRoot(document.getElementById('root')).render(
                    request to /api/courses/undefined, which 400s confusingly. */}
 
             <Route path="/courses" element={<LibraryPage />} />
+            <Route path="/billing" element={<BillingPage />} />
             <Route path="/courses/:courseId" element={<CoursePage />} />
             <Route path="/lessons/:lessonId" element={<LessonRoute />} />
           </Route>

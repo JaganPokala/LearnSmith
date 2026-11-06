@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
 import { buildSignInOptions, signInErrorMessage } from '../lib/signIn.js';
 
-export default function SignInActions({ stacked = false, compact = false }) {
+export default function SignInActions({ stacked = false, compact = false, returnTo = '/courses' }) {
   const { loginWithRedirect, isLoading, isAuthenticated } = useAuth();
   const inFlight = useRef(false);
   const [pending, setPending] = useState(null);
@@ -15,7 +15,7 @@ export default function SignInActions({ stacked = false, compact = false }) {
     inFlight.current = true;
     setPending(provider);
     setError(null);
-    try { await loginWithRedirect(buildSignInOptions(provider)); }
+    try { await loginWithRedirect(buildSignInOptions(provider, returnTo)); }
     catch (err) { setError(signInErrorMessage(err)); }
     finally { inFlight.current = false; setPending(null); }
   }

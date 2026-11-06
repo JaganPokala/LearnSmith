@@ -17,6 +17,9 @@ import healthRouter from './routes/health.js';
 import coursesRouter from './routes/courses.js';
 import lessonsRouter from './routes/lessons.js';
 import usageRouter from './routes/usage.js';
+import billingRouter, { createBillingWebhook } from './routes/billing.js';
+import { requireDatabase } from './middlewares/requireDatabase.js';
+import { billingWebhookLimiter } from './middlewares/burstLimits.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
 import { requestTrace, traceError } from './middlewares/trace.js';
 import { attachUser } from './middlewares/auth.js';
@@ -74,6 +77,9 @@ app.use(
 // Caps the incoming REQUEST body only; responses are unaffected. A course
 // prompt is ~40 bytes, so 10kb is generous and stops a junk POST allocating
 // whatever the sender feels like.
+// Signature validation needs the exact bytes, before JSON parsing or guest/JWT
+// identity middleware. Razorpay supplies authentication through its signature.
+app.post('/api/billing/webhook', billingWebhookLimiter, express.raw({ type: 'application/json', limit: '64kb' }), requireDatabase, createBillingWebhook());
 app.use(express.json({ limit: '10kb' }));
 
 // Redundant in development — requestTrace's "<--" line carries everything
@@ -123,6 +129,7 @@ if (!config.isProduction) {
 app.use('/api/courses', coursesRouter);
 app.use('/api/lessons', lessonsRouter);
 app.use('/api/usage', usageRouter);
+app.use('/api/billing', billingRouter);
 
 // notFound after every real route or it swallows them; errorHandler last,
 // because it only catches errors from middleware above it.

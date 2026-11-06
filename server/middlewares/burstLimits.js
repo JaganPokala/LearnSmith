@@ -6,6 +6,8 @@ export function createBurstLimiters({
   sessionsPerIp = BURST_LIMITS.sessionsPerIp,
   generationRequestsPerIdentity = BURST_LIMITS.generationRequestsPerIdentity,
   learningWritesPerIdentity = BURST_LIMITS.learningWritesPerIdentity,
+  billingWritesPerIdentity = BURST_LIMITS.billingWritesPerIdentity,
+  billingWebhooksPerIp = BURST_LIMITS.billingWebhooksPerIp,
 } = {}) {
   const options = (identifier, label) => ({
     windowMs,
@@ -59,9 +61,18 @@ export function createBurstLimiters({
     },
   });
 
-  return { sessionLimiter, generationLimiter, learningWriteLimiter };
+  const billingWriteLimiter = rateLimit({
+    ...options('billing', 'subscription requests'), limit: billingWritesPerIdentity,
+    keyGenerator(req) {
+      if (typeof req.creator !== 'string' || !req.creator) throw new Error('Identity middleware must run before billing.');
+      return req.creator;
+    },
+  });
+  const billingWebhookLimiter = rateLimit({ ...options('billing-webhook', 'payment notifications'), limit: billingWebhooksPerIp });
+
+  return { sessionLimiter, generationLimiter, learningWriteLimiter, billingWriteLimiter, billingWebhookLimiter };
 }
 
 // Import these same instances wherever the routes use them. Separate instances
 // would create independent counters and let requests evade a combined limit.
-export const { sessionLimiter, generationLimiter, learningWriteLimiter } = createBurstLimiters();
+export const { sessionLimiter, generationLimiter, learningWriteLimiter, billingWriteLimiter, billingWebhookLimiter } = createBurstLimiters();

@@ -39,6 +39,7 @@ Everything the model returns is checked against a hand-written contract before i
 - **PDF export** — the browser's own print pipeline against a print stylesheet. Real selectable text, not a screenshot.
 - **Try without an account** — generation is open to guests; only your saved library needs a login.
 - **Google sign-in through Auth0** — explicit Google buttons alongside Universal Login, with safe post-login navigation and understandable login errors. Configure the tenant's Google connection before using this in a deployment.
+- **Subscriptions** — Razorpay hosted checkout for one INR 50/month Pro plan, verified paid periods, higher server-enforced daily limits, cancellation, expiry, and signed payment notifications. Explicit test/live modes use separate billing records.
 
 ---
 
@@ -312,6 +313,102 @@ Run `npm run verify:course-context` from `server/` for ordered context, first/mi
 Run `npm run verify:learning` from `server/` for progress/quiz ownership, guest isolation, concurrent completion, server grading, idempotent submissions, retakes, version changes, cursor pages, library summaries, and deletion cleanup. It uses the isolated Atlas test database and no provider calls. Run the same command from `client/` for saved-state acknowledgement, stale responses, account/lesson isolation, history refresh failures, original question indexing, and ensuring learning writes do not emit generation events. The client checks need no backend or database.
 
 ### 4. Run
+
+#### Razorpay subscriptions
+
+Save these in the root backend `.env` (never in frontend environment variables):
+
+```dotenv
+RAZORPAY_MODE=test
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_PLAN_ID=
+RAZORPAY_WEBHOOK_SECRET=<at least 24 random characters>
+```
+
+From `server/`, run `npm run setup:billing` to create the fixed **INR 50/month**
+test plan when no plan ID is configured, or verify the configured plan. It saves
+the plan ID into root `.env` and creates no customer subscription or payment.
+If a create request has an unknown outcome, inspect the provider dashboard before
+running setup again. Restart the backend after changing `.env`. Test and live
+keys are separate; a key whose prefix does not match `RAZORPAY_MODE` is rejected.
+Mode defaults to `test`. The setup helper only creates test plans.
+
+Run `npm run check:billing` from `server/` to diagnose configuration safely. It
+checks required settings, verifies the plan through Razorpay, and detects a
+running local backend that still has billing disabled after an `.env` change.
+It prints no secrets and creates no plans, subscriptions, or payments. A valid
+key pair alone is insufficient: the plan ID must also be configured, and the
+backend must restart after setup.
+
+For real payments, first confirm merchant activation and website approval in
+Razorpay. Configure the deployed backend with `RAZORPAY_MODE=live`, a matching
+`rzp_live_...` key ID/secret, a **live** INR 50/month plan ID (monthly interval 1),
+and the live webhook's secret. Never reuse a test plan or assume test webhook
+configuration carries over. Run `check:billing`, restart the backend, deploy the
+matching frontend, and verify a completed checkout and webhook delivery before
+opening paid subscriptions to customers. The UI displays the recurring price
+and real-payment wording in live mode. Existing local test credentials are not
+changed automatically. See [Razorpay API key setup](https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/).
+
+Live accounts/events use `livebillingaccounts` and `livebillingevents`; existing
+test records remain in their original collections. This preserves existing unique
+indexes without a destructive migration. Entitlements read only the configured
+mode and verify the record's mode, so test payments cannot unlock live Pro access.
+Mode changes should be deployment changes, not a runtime user preference.
+
+The `/billing` page offers one Pro plan: **10 courses, 50 lessons, 20 narrations
+per UTC day**, with monthly recurring billing for up to **12 cycles**. Existing
+daily usage is retained on upgrade/downgrade. Only signed-in users can subscribe;
+ownership uses their verified Auth0 subject. Guests can view the plan and sign in.
+
+Checkout responses are verified with the server-stored subscription ID. Pro is
+granted only after Razorpay's API confirms a fully paid matching INR 50 invoice
+covering the current time and its captured, unrefunded payment. Browser success,
+an active mandate, or a claimed tier cannot grant access. Cancellation stops
+future renewals immediately while retaining the period already paid for.
+Failed renewal does not extend access, and request-time expiry restores Free.
+
+For automatic subscription updates, configure a webhook in the **same mode** with the
+same webhook secret at `https://YOUR_BACKEND/api/billing/webhook`. Select the
+subscription authenticated, activated, charged, completed, updated, pending,
+halted, cancelled, paused and resumed events. The endpoint needs a public HTTPS
+address; Razorpay cannot reach localhost directly. Deploy the matching backend
+code or use an allowed development tunnel. See [Razorpay's webhook testing guide](https://razorpay.com/docs/webhooks/validate-test).
+
+Webhook signatures are checked against raw request bytes before JSON parsing or
+guest/JWT identity middleware. Event IDs deduplicate delivery; synchronization
+fetches current provider state and uses an expiring, fenced lease. Writes assign
+paid intervals rather than incrementing access days. Unknown subscription-create
+outcomes block another creation until manually reconciled, preventing duplicate
+mandates. Known created subscriptions can resume checkout using their stored ID.
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/billing/plan` | Public plan metadata, billing mode, and configuration availability |
+| GET | `/api/billing/status` | Signed-in owner's saved billing state |
+| POST | `/api/billing/checkout` | Create or resume the owner's checkout |
+| POST | `/api/billing/verify` | Verify callback signature and reconcile paid access |
+| POST | `/api/billing/sync` | Explicit provider-state reconciliation |
+| POST | `/api/billing/cancel` | Stop the owner's future renewals |
+| POST | `/api/billing/webhook` | Signed provider notifications; no browser identity required |
+
+Run `npm run verify:billing-unit` from `server/` for fake HTTP adapter/signature/
+invoice/payment checks and `npm run verify:billing` for isolated Atlas integration
+checks with fake providers. Run `npm run verify:checkout` from `client/` for hosted
+checkout callbacks, dismissal, failure, script errors and live-key rejection.
+Run `npm run verify:billing-modes` for isolated test/live records, live callback
+verification, webhook deduplication across modes, cancellation, and entitlement
+checks using fake providers and the separate test database. Verification scripts
+create no real payments or AI calls.
+
+This is a fixed-price integration. Merchant activation, taxes, price-version
+migration, automated unknown-create recovery and production delivery verification
+are separate work. Refunds are checked during reconciliation; dedicated refund/
+dispute events are not implemented. Slow hosts can exceed webhook delivery
+deadlines; safe retries and manual status reconciliation exist. Real sandbox
+checkout and webhook delivery must be verified with the merchant account before
+calling the external integration complete.
 
 #### Google login setup
 

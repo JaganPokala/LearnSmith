@@ -13,7 +13,7 @@ for (const value of [undefined, null, 4, '', 'https://evil.example', '//evil.exa
   'javascript:alert(1)', '/courses\n//evil.example', '/courses/../../redirect', '/api/usage', '/unknown']) {
   assert.equal(safeReturnTo(value), '/courses', `Unsafe or unsupported return target: ${JSON.stringify(value)}`);
 }
-for (const value of ['/', '/courses', '/courses?tab=recent', '/courses/111111111111111111111111',
+for (const value of ['/', '/billing', '/courses', '/courses?tab=recent', '/courses/111111111111111111111111',
   '/lessons/222222222222222222222222#lesson-section-1']) {
   assert.equal(safeReturnTo(value), value);
 }

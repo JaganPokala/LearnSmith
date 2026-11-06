@@ -1,5 +1,6 @@
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
 import SignInActions from './SignInActions.jsx';
+import { Link } from 'react-router-dom';
 
 /**
  * Sign in / sign out, pinned to the bottom of the rail.
@@ -33,6 +34,7 @@ export default function AccountBlock() {
       <p className="truncate text-dim" title={user?.email ?? ''}>
         {user?.name ?? user?.email ?? 'signed in'}
       </p>
+      <Link to="/billing" className="mt-2 block text-glow hover:underline">Subscription →</Link>
 
       <button
         type="button"

@@ -1,5 +1,5 @@
 import DailyUsage from '../models/DailyUsage.js';
-import { getDailyLimits } from '../config/usageLimits.js';
+import { getEntitlement } from './entitlementService.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 
 export async function consumeDailyQuota({
@@ -17,7 +17,7 @@ export async function consumeDailyQuota({
     throw new Error('Unknown quota resource.');
   }
 
-  const limits = getDailyLimits(identityType);
+  const { limits } = await getEntitlement({ creator, identityType, now });
   const limit = limits[resource];
 
   const day = now.toISOString().slice(0, 10);

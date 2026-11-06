@@ -11,6 +11,7 @@ import {
   generateLessonAudioContent,
 } from '../controllers/lessonController.js';
 import { requireDatabase } from '../middlewares/requireDatabase.js';
+import { generationLimiter } from '../middlewares/burstLimits.js';
 
 const router = Router();
 
@@ -18,11 +19,11 @@ const router = Router();
 router.use(requireDatabase);
 
 router.get('/:id', getLesson);
-router.post('/:id/generate', generateLessonContent);
+router.post('/:id/generate', generationLimiter, generateLessonContent);
 
 // GET reads, POST pays. Same split as the lesson itself: a revalidation or a
 // link preview must never start a billed synthesis.
 router.get('/:id/audio', getLessonAudio);
-router.post('/:id/audio', generateLessonAudioContent);
+router.post('/:id/audio', generationLimiter, generateLessonAudioContent);
 
 export default router;

@@ -4,12 +4,14 @@
  */
 
 import Course from '../models/Course.js';
+import { randomUUID } from 'node:crypto';
 import Lesson from '../models/Lesson.js';
 import { generateCourse } from '../services/courseGenerator.js';
 import { saveCourseTree, deleteCourseTree } from '../services/courseService.js';
 import { creatorOf } from '../middlewares/auth.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
+import { consumeDailyQuota } from '../services/usageService.js';
 
 /**
  * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
@@ -69,37 +71,41 @@ function readTopic(body) {
   return topic;
 }
 
-/**
- * POST /api/courses/generate — body { prompt }, 201 with the saved tree.
- *
- * No try/catch: Express 5 forwards async rejections, and everything thrown
- * below is already an ApiError with the right status and code.
- *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- */
-export async function createCourse(req, res) {
-  const startedAt = performance.now();
+export function createCourseHandler({
+  generate = generateCourse,
+  consumeQuota = consumeDailyQuota,
+  save = saveCourseTree,
+} = {}) {
+  return async function createCourse(req, res) {
+    const startedAt = performance.now();
 
-  // `creator` is never read from the body. If it were, anyone could write into
-  // — and by the same trick read — another user's library once Phase 8 lands.
-  const topic = readTopic(req.body);
+    const topic = readTopic(req.body);
+    const creator = creatorOf(req);
 
-  const { course, attempts, ms } = await generateCourse(topic);
+    await consumeQuota({
+      creator,
+      identityType: req.identityType,
+      resource: 'courses',
+    });
 
-  const saved = await saveCourseTree(course, creatorOf(req));
+    const { course, attempts, ms } = await generate(topic, {
+      creator,
+      generationId: randomUUID(),
+    });
+    const saved = await save(course, creator);
 
-  // Generation ms and total ms separately: that is what tells you later whether
-  // a slow request was the model or the database.
-  const totalMs = Math.round(performance.now() - startedAt);
+    const totalMs = Math.round(performance.now() - startedAt);
 
-  trace(
-    `  POST /api/courses/generate "${topic}" attempts=${attempts} generate=${ms}ms total=${totalMs}ms modules=${saved.modules.length}`
-  );
+    trace(
+      `POST /api/courses/generate attempts=${attempts} ` +
+      `generate=${ms}ms total=${totalMs}ms`,
+    );
 
-  // 201, not 200 — this created a resource.
-  res.status(201).json(saved);
+    return res.status(201).json(saved);
+  };
 }
+
+export const createCourse = createCourseHandler();
 
 /**
  * GET /api/courses — the library list, newest first.

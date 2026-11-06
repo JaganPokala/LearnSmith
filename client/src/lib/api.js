@@ -5,12 +5,6 @@
  * screens can branch on the code instead of parsing the envelope themselves.
  */
 
-const BASE = import.meta.env.VITE_API_URL;
-
-if (!BASE) {
-  // Better a loud message now than "undefined/api/courses" 404s later.
-  console.error('VITE_API_URL is not set. Add it to client/.env and restart the dev server.');
-}
 
 /** An API failure, carrying the backend's machine-readable code. */
 export class ApiError extends Error {
@@ -51,15 +45,51 @@ export function setTokenSource(fn) {
   tokenSource = fn;
 }
 
-async function request(path, { timeoutMs = READ_TIMEOUT_MS, parse = 'json', ...options } = {}) {
-  let res;
+let guestSessionPromise = null;
 
-  // AWAIT. `tokenSource()` returns a promise, and a forgotten await sends the
-  // literal string "Bearer [object Promise]" — a 401 that reads like a broken
-  // Auth0 configuration and sends you to the dashboard instead of to this line.
-  //
-  // No header at all when there is no token, rather than an empty one: the
-  // guest routes must look exactly like they did before auth existed.
+function initializeGuestSession() {
+  const sendSessionRequest = () =>
+    request('/api/session', {
+      method: 'POST',
+      skipGuestInit: true,
+    });
+
+  if (navigator.locks?.request) {
+    return navigator.locks.request(
+      'learnsmith-guest-session',
+      sendSessionRequest,
+    );
+  }
+
+  // Older browsers retain coordination within this page only.
+  return sendSessionRequest();
+}
+
+function ensureGuestSession() {
+  if (!guestSessionPromise) {
+    guestSessionPromise = initializeGuestSession().catch((err) => {
+      guestSessionPromise = null;
+      throw err;
+    });
+  }
+
+  return guestSessionPromise;
+}
+
+async function request(
+  path,
+  {
+    timeoutMs = READ_TIMEOUT_MS,
+    parse = 'json',
+    skipGuestInit = false,
+    ...options
+  } = {},
+) {
+  if (!skipGuestInit) {
+    await ensureGuestSession();
+  }
+
+  let res;
   const token = tokenSource ? await tokenSource() : null;
 
   const headers = token
@@ -73,7 +103,11 @@ async function request(path, { timeoutMs = READ_TIMEOUT_MS, parse = 'json', ...o
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    res = await fetch(`${BASE}${path}`, { ...options, headers, signal: controller.signal });
+    res = await fetch(path, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
   } catch (err) {
     // TWO reasons fetch rejects now, and they need opposite advice. Before the
     // abort existed there was only one, so collapsing them was fine; now

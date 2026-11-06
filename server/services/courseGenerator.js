@@ -13,6 +13,7 @@ import { courseSchema, COURSE_SCHEMA_NAME } from './schemas.js';
 import { parseAIJson } from '../utils/parseAIJson.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
+import { generationTracker } from './generationTracking.js';
 
 /** Milestone contract. Also stated in the prompt. */
 const MODULES_MIN = 3;
@@ -137,75 +138,93 @@ export function validateCourse(course) {
  * @returns {Promise<{ course: object, attempts: number, ms: number }>}
  * @throws {ApiError} when both attempts fail
  */
-export async function generateCourse(topic) {
-  const startedAt = performance.now();
+export function createCourseGenerator({
+  generate = generateJSON,
+  tracker = generationTracker,
+} = {}) {
+  return async function generateCourse(topic, context = {}) {
+    const startedAt = performance.now();
 
-  // Appended to the conversation on the second attempt.
-  let feedback;
+    // Appended to the conversation on the second attempt.
+    let feedback;
 
-  // Two, not three: each attempt is ~5s and a real API call, and a third mostly
-  // adds latency to a request that is already failing.
-  const MAX_ATTEMPTS = 2;
+    // Two, not three: each attempt is ~5s and a real API call, and a third mostly
+    // adds latency to a request that is already failing.
+    const MAX_ATTEMPTS = 2;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // The catch wraps the whole attempt: an upstream failure and a bad response
-    // both mean "this attempt failed", and both deserve attempt 2.
-    try {
-      const { text } = await generateJSON({
-        messages: courseMessages(topic, feedback),
-        schema: courseSchema,
-        schemaName: COURSE_SCHEMA_NAME,
-      });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const tracking = { ...context, operation: 'course', attemptNumber: attempt };
+      // The catch wraps the whole attempt: an upstream failure and a bad response
+      // both mean "this attempt failed", and both deserve attempt 2.
+      try {
+        const { text } = await generate({
+          messages: courseMessages(topic, feedback),
+          schema: courseSchema,
+          schemaName: COURSE_SCHEMA_NAME,
+          tracking,
+        });
 
-      // The context is what makes a production log line say WHICH generation died.
-      const course = parseAIJson(text, { topic, attempt });
+        // The context is what makes a production log line say WHICH generation died.
+        const course = parseAIJson(text, { topic, attempt });
 
-      const problems = validateCourse(course);
+        const problems = validateCourse(course);
 
-      if (problems.length === 0) {
-        const ms = Math.round(performance.now() - startedAt);
+        if (problems.length === 0) {
+          await tracker.validation(tracking, 'accepted');
+          const ms = Math.round(performance.now() - startedAt);
 
-        trace(
-          `  generator: "${topic}" ok on attempt ${attempt}, ${ms}ms, ${course.modules.length} modules`
+          trace(
+            `  generator: "${topic}" ok on attempt ${attempt}, ${ms}ms, ${course.modules.length} modules`
+          );
+
+          return { course, attempts: attempt, ms };
+        }
+
+        // Logged either way: if a retry silently fixes a recurring problem you
+        // never learn the prompt has a systematic flaw.
+        traceError(
+          `  generator: "${topic}" attempt ${attempt} invalid - ${problems.length} violation(s): ${problems.join('; ')}`
         );
 
-        return { course, attempts: attempt, ms };
-      }
+        if (attempt === MAX_ATTEMPTS) {
+          throw new ApiError(
+            502,
+            'ai_invalid_course',
+            `The model could not produce a valid course for "${topic}" in ${MAX_ATTEMPTS} attempts: ${problems.join('; ')}`
+          );
+        }
 
-      // Logged either way: if a retry silently fixes a recurring problem you
-      // never learn the prompt has a systematic flaw.
-      traceError(
-        `  generator: "${topic}" attempt ${attempt} invalid - ${problems.length} violation(s): ${problems.join('; ')}`
-      );
+        feedback = problems.join('; ');
+        await tracker.validation(tracking, 'rejected', 'ai_invalid_course');
+      } catch (err) {
+        if (['tracking_unavailable', 'tracking_context_invalid'].includes(err.code)) throw err;
+        // Our own verdict from above, not a failure to classify. Let it out.
+        if (err.code === 'ai_invalid_course') {
+          await tracker.validation(tracking, 'rejected', err.code);
+          throw err;
+        }
+        if (['ai_unparseable', 'ai_truncated', 'ai_empty'].includes(err.code)) {
+          await tracker.validation(tracking, 'rejected', err.code);
+        }
 
-      if (attempt === MAX_ATTEMPTS) {
-        throw new ApiError(
-          502,
-          'ai_invalid_course',
-          `The model could not produce a valid course for "${topic}" in ${MAX_ATTEMPTS} attempts: ${problems.join('; ')}`
+        // Both retry, but a log that merges them makes the upstream-failure rate
+        // unmeasurable.
+        const upstream = err.code === 'ai_unavailable';
+
+        traceError(
+          `  generator: "${topic}" attempt ${attempt} failed (${upstream ? 'upstream' : 'content'}, ${err.code ?? 'no code'}): ${err.message}`
         );
+
+        if (attempt === MAX_ATTEMPTS) throw err;
+
+        // Feedback only for CONTENT failures — telling the model to fix a network
+        // timeout is nonsense and wastes prompt tokens.
+        feedback = upstream
+          ? undefined
+          : `The previous attempt could not be read as a course: ${err.message}`;
       }
-
-      feedback = problems.join('; ');
-    } catch (err) {
-      // Our own verdict from above, not a failure to classify. Let it out.
-      if (err.code === 'ai_invalid_course') throw err;
-
-      // Both retry, but a log that merges them makes the upstream-failure rate
-      // unmeasurable.
-      const upstream = err.code === 'ai_unavailable';
-
-      traceError(
-        `  generator: "${topic}" attempt ${attempt} failed (${upstream ? 'upstream' : 'content'}, ${err.code ?? 'no code'}): ${err.message}`
-      );
-
-      if (attempt === MAX_ATTEMPTS) throw err;
-
-      // Feedback only for CONTENT failures — telling the model to fix a network
-      // timeout is nonsense and wastes prompt tokens.
-      feedback = upstream
-        ? undefined
-        : `The previous attempt could not be read as a course: ${err.message}`;
     }
-  }
+  };
 }
+
+export const generateCourse = createCourseGenerator();

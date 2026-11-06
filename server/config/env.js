@@ -35,6 +35,7 @@ if (envFileLoaded) {
 const SPEC = [
   { key: 'NODE_ENV', fallback: 'development' },
   { key: 'PORT', fallback: '5000', number: true },
+  { key: 'GUEST_COOKIE_SECRET', required: true, secret: true },
   // Comma-separated allowlist, not one origin — Vercel gives every push and
   // every PR its own preview domain. See parseOrigins below.
   { key: 'CLIENT_ORIGIN', fallback: 'http://localhost:5173' },

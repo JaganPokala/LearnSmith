@@ -6,7 +6,7 @@ One line of text becomes a structured syllabus — ordered modules, written less
 
 | | |
 |---|---|
-| **Live app** | _add your Vercel URL_ |
+| **Live app** | https://learn-smith.vercel.app/ |
 | **API** | https://learnsmith-api.onrender.com |
 | **Health** | https://learnsmith-api.onrender.com/api/health |
 
@@ -109,7 +109,7 @@ erDiagram
     COURSE {
         string   title
         string   description
-        string   creator "Auth0 sub, or guest-user"
+        string   creator "Auth0 sub, or guest:UUID"
         ObjectId modules "array, ref Module"
         string   tags "array"
     }
@@ -133,7 +133,21 @@ erDiagram
     }
 ```
 
-`creator` is **never read from the request body** — it comes from the verified JWT, or the shared `guest-user` identity. Ownership is enforced by putting `creator` in the query itself, so another user's course returns `404`, not `403`: "that isn't yours" and "that doesn't exist" should look identical from outside.
+`creator` is **never read from the request body** — it comes from the verified JWT, or an individual guest identity in a signed HttpOnly cookie. Ownership is enforced by putting `creator` in the query itself, so another user's course returns `404`. `POST /api/session` establishes the guest cookie before other API calls. Guest cookies can be deleted, so guest allowances are a soft limit rather than proof of a unique person.
+
+## Generation limits and accounting
+
+Daily UTC allowances are defined in `server/config/usageLimits.js`: guests receive 1 course outline and 5 lesson bodies; signed-in free users receive 3 outlines and 20 lesson bodies. These initial limits are provisional. Cached lessons and blocked duplicate claims consume no allowance. Admitted attempts consume allowance even if generation later fails. Audio has separate pending protection/accounting work.
+
+Burst limits in `server/config/burstLimits.js` allow 20 generation POSTs per identity per 60-second window, shared across course, lesson, and audio routes. Session setup allows 60 requests per observed IP per window. These counters include cached and rejected requests; blocked requests receive `429` and `Retry-After` before reaching generation or quota consumption. GET routes remain available. Counters live in one process and reset on restart; multiple backend processes would need a shared store such as Redis. Verify the observed client IP through the deployed Vercel-to-Render proxy path before relying on the session IP limit.
+
+Lesson claims use atomic database updates, expiring leases, and attempt IDs. Only the current, unexpired attempt can publish content. Quota checks run after ownership/cache/claim checks and before provider calls; quota rejection releases the lesson claim.
+
+Each course/lesson provider call has a `GenerationCall` record, including retries and responses rejected by validation. The initial record is saved before calling AI; failure to establish accounting stops new paid work. Usage is saved before truncation or content checks. Unknown outcomes or usage remain unknown rather than zero. A post-response accounting write failure preserves the paid result and emits metadata instead of triggering a duplicate provider call.
+
+`GET /api/usage` returns the current owner's UTC-day allowances and text-generation totals. Token totals are known subtotals; a partial cost report includes `knownEstimatedCostUsd` but leaves `estimatedCostUsd` null. Estimates use versioned standard-tier rates in `server/config/modelPricing.js`; unknown models or unsupported billing modes remain unpriced. This scope excludes audio, hosting, taxes, and account-specific discounts.
+
+Browser requests use same-origin `/api` forwarding through Vite locally and Vercel in production. A shared Promise coordinates guest setup within a page; Web Locks serialize setup across supported same-origin tabs. Browsers without Web Locks retain only page-local coordination. These browser mechanisms are not server-side abuse prevention.
 
 ---
 
@@ -163,6 +177,8 @@ Base URL: `http://localhost:5000` in development.
 |---|---|---|---|
 | `GET` | `/` | — | Service banner — tells "wrong URL" from "server down" |
 | `GET` | `/api/health` | — | `ok`, `uptime`, `env`, `db`, and derived `features` flags |
+| `POST` | `/api/session` | — | Establish or reuse a signed guest cookie |
+| `GET` | `/api/usage` | Guest/account identity | Current UTC-day quotas, known token totals, and cost estimates for course/lesson text |
 
 ### Courses
 
@@ -215,6 +231,7 @@ Create `.env` in the **project root** (see `.env.example` for the annotated vers
 PORT=5000
 NODE_ENV=development
 CLIENT_ORIGIN=http://localhost:5173
+GUEST_COOKIE_SECRET=<random 32-byte hex secret>
 
 MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/text-to-learn
 
@@ -232,14 +249,18 @@ AUTH0_AUDIENCE=
 Create `client/.env`:
 
 ```bash
-VITE_API_URL=http://localhost:5000
-
 VITE_AUTH0_DOMAIN=
 VITE_AUTH0_CLIENT_ID=
 VITE_AUTH0_AUDIENCE=
 ```
 
 > Anything prefixed `VITE_` is **inlined into the browser bundle**. It is configuration, not a secret.
+
+Generate the server cookie secret with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` and keep it stable across restarts and backend instances. API URLs are relative: the Vite proxy targets port 5000, and `client/vercel.json` forwards production API requests to Render. If the backend address or port changes, update the corresponding proxy configuration.
+
+For database verification, set `TEST_MONGO_URI` locally. Scripts explicitly use the separate `learnsmith_generation_test` database and remove only their temporary records. From `server/`, run `npm run verify:generation`, `npm run verify:quota`, `npm run verify:controllers`, and `npm run verify:accounting`. Controller/accounting tests use fake provider calls, so they do not incur AI charges. Atlas access is still required.
+
+Run `npm run verify:bursts` from `server/` to check burst limits using a temporary local HTTP server. This check needs neither MongoDB nor AI credentials.
 
 ### 4. Run
 
@@ -270,7 +291,7 @@ Every optional key is genuinely optional. `/api/health` reports which features a
 
 **API → Render.** Root directory `server`, build `npm install`, start `npm start`. Set every server variable above, plus `CLIENT_ORIGIN` pointing at your Vercel URL (CORS is an allowlist, never `*`). `SIGTERM` is handled, so redeploys drain in-flight requests instead of 502-ing a generation mid-flight.
 
-**Client → Vercel.** Root directory `client`. `client/vercel.json` rewrites all paths to `index.html` for client-side routing. `VITE_*` values are baked in **at build time**, so changing one requires a rebuild, not a restart.
+**Client → Vercel.** Root directory `client`. `client/vercel.json` forwards `/api` requests to Render before rewriting other paths to `index.html` for client-side routing. `VITE_*` values are baked in **at build time**, so changing one requires a rebuild, not a restart.
 
 ---
 

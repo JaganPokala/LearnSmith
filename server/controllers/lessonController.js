@@ -17,6 +17,7 @@ import { LessonAudio } from '../models/LessonAudio.js';
 import { features } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
+import { consumeDailyQuota } from '../services/usageService.js';
 
 import {
   claimLessonGeneration,
@@ -41,6 +42,7 @@ import {
 export function createGenerateLessonContent({
     generate = generateLesson,
     resolveVideos = resolveVideoBlocks,
+    consumeQuota = consumeDailyQuota,
   } = {}) {
     return async function generateLessonContent(req, res) {
     const startedAt = performance.now();
@@ -107,19 +109,22 @@ export function createGenerateLessonContent({
     const { attemptId } = claim;
 
     try {
-      // const { lesson: generated, ms } = await generateLesson({
-      //   courseTitle: course.title,
-      //   moduleTitle: module.title,
-      //   lessonTitle: claim.lesson.title,
-      // });
+      // Cache hits and unsuccessful claims return before consuming quota.
+      // Keep this inside try so quota rejection releases this attempt's claim.
+      await consumeQuota({
+        creator: creatorOf(req),
+        identityType: req.identityType,
+        resource: 'lessons',
+      });
 
       const { lesson: generated, ms } = await generate({
         courseTitle: course.title,
         moduleTitle: module.title,
         lessonTitle: claim.lesson.title,
+      }, {
+        creator: creatorOf(req),
+        generationId: attemptId,
       });
-
-      // const content = await resolveVideoBlocks(generated.content);
 
       const content = await resolveVideos(generated.content);
 

@@ -10,6 +10,7 @@ import { lessonSchema, LESSON_SCHEMA_NAME, BLOCK_TYPES } from './schemas.js';
 import { parseAIJson } from '../utils/parseAIJson.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
+import { generationTracker } from './generationTracking.js';
 
 // 1-3 rather than the milestone's 4-5: with explanations, 4-5 pushed lesson
 // generation past 20s and dropped first-attempt success to 0/3.
@@ -165,68 +166,86 @@ export function validateLesson(lesson) {
  * @returns {Promise<{ lesson: object, attempts: number, ms: number }>}
  * @throws {ApiError}
  */
-export async function generateLesson({ courseTitle, moduleTitle, lessonTitle }) {
-  const startedAt = performance.now();
+export function createLessonGenerator({
+  generate = generateJSON,
+  tracker = generationTracker,
+} = {}) {
+  return async function generateLesson({ courseTitle, moduleTitle, lessonTitle }, context = {}) {
+    const startedAt = performance.now();
 
-  let feedback;
+    let feedback;
 
-  const MAX_ATTEMPTS = 2;
+    const MAX_ATTEMPTS = 2;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const { text } = await generateJSON({
-        messages: lessonMessages({ courseTitle, moduleTitle, lessonTitle }, feedback),
-        schema: lessonSchema,
-        schemaName: LESSON_SCHEMA_NAME,
-      });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const tracking = { ...context, operation: 'lesson', attemptNumber: attempt };
+      try {
+        const { text } = await generate({
+          messages: lessonMessages({ courseTitle, moduleTitle, lessonTitle }, feedback),
+          schema: lessonSchema,
+          schemaName: LESSON_SCHEMA_NAME,
+          tracking,
+        });
 
-      const lesson = parseAIJson(text, { lesson: lessonTitle, attempt });
+        const lesson = parseAIJson(text, { lesson: lessonTitle, attempt });
 
-      const problems = validateLesson(lesson);
+        const problems = validateLesson(lesson);
 
-      if (problems.length === 0) {
-        const ms = Math.round(performance.now() - startedAt);
+        if (problems.length === 0) {
+          await tracker.validation(tracking, 'accepted');
+          const ms = Math.round(performance.now() - startedAt);
 
-        // Block and mcq counts are what reveal lessons getting thinner as
-        // prompts change.
-        const mcqCount = lesson.content.filter((block) => block.type === 'mcq').length;
+          // Block and mcq counts are what reveal lessons getting thinner as
+          // prompts change.
+          const mcqCount = lesson.content.filter((block) => block.type === 'mcq').length;
 
-        trace(
-          `  generator: "${lessonTitle}" ok on attempt ${attempt}, ${ms}ms, ${lesson.content.length} blocks, ${mcqCount} mcqs`
+          trace(
+            `  generator: "${lessonTitle}" ok on attempt ${attempt}, ${ms}ms, ${lesson.content.length} blocks, ${mcqCount} mcqs`
+          );
+
+          return { lesson, attempts: attempt, ms };
+        }
+
+        traceError(
+          `  generator: "${lessonTitle}" attempt ${attempt} invalid - ${problems.length} violation(s): ${problems.join('; ')}`
         );
 
-        return { lesson, attempts: attempt, ms };
-      }
+        if (attempt === MAX_ATTEMPTS) {
+          throw new ApiError(
+            502,
+            'ai_invalid_lesson',
+            `The model could not produce a valid lesson for "${lessonTitle}" in ${MAX_ATTEMPTS} attempts: ${problems.join('; ')}`
+          );
+        }
 
-      traceError(
-        `  generator: "${lessonTitle}" attempt ${attempt} invalid - ${problems.length} violation(s): ${problems.join('; ')}`
-      );
+        feedback = problems.join('; ');
+        await tracker.validation(tracking, 'rejected', 'ai_invalid_lesson');
+      } catch (err) {
+        if (['tracking_unavailable', 'tracking_context_invalid'].includes(err.code)) throw err;
+        // Our own verdict, not a failure to classify. Let it out.
+        if (err.code === 'ai_invalid_lesson') {
+          await tracker.validation(tracking, 'rejected', err.code);
+          throw err;
+        }
+        if (['ai_unparseable', 'ai_truncated', 'ai_empty'].includes(err.code)) {
+          await tracker.validation(tracking, 'rejected', err.code);
+        }
 
-      if (attempt === MAX_ATTEMPTS) {
-        throw new ApiError(
-          502,
-          'ai_invalid_lesson',
-          `The model could not produce a valid lesson for "${lessonTitle}" in ${MAX_ATTEMPTS} attempts: ${problems.join('; ')}`
+        const upstream = err.code === 'ai_unavailable';
+
+        traceError(
+          `  generator: "${lessonTitle}" attempt ${attempt} failed (${upstream ? 'upstream' : 'content'}, ${err.code ?? 'no code'}): ${err.message}`
         );
+
+        if (attempt === MAX_ATTEMPTS) throw err;
+
+        // Feedback only for content failures.
+        feedback = upstream
+          ? undefined
+          : `The previous attempt could not be read as a lesson: ${err.message}`;
       }
-
-      feedback = problems.join('; ');
-    } catch (err) {
-      // Our own verdict, not a failure to classify. Let it out.
-      if (err.code === 'ai_invalid_lesson') throw err;
-
-      const upstream = err.code === 'ai_unavailable';
-
-      traceError(
-        `  generator: "${lessonTitle}" attempt ${attempt} failed (${upstream ? 'upstream' : 'content'}, ${err.code ?? 'no code'}): ${err.message}`
-      );
-
-      if (attempt === MAX_ATTEMPTS) throw err;
-
-      // Feedback only for content failures.
-      feedback = upstream
-        ? undefined
-        : `The previous attempt could not be read as a lesson: ${err.message}`;
     }
-  }
+  };
 }
+
+export const generateLesson = createLessonGenerator();

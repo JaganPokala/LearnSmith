@@ -6,13 +6,14 @@ import { Router } from 'express';
 import { createCourse, listCourses, getCourse, removeCourse } from '../controllers/courseController.js';
 import { requireDatabase } from '../middlewares/requireDatabase.js';
 import { requireUser } from '../middlewares/auth.js';
+import { generationLimiter } from '../middlewares/burstLimits.js';
 
 const router = Router();
 
 // On the router, so a route added later cannot forget it.
 router.use(requireDatabase);
 
-router.post('/generate', createCourse);
+router.post('/generate', generationLimiter, createCourse);
 // The ONLY route that demands a login. Everything else works for a guest,
 // which is what lets a visitor generate and read a course without an account.
 router.get('/', requireUser, listCourses);

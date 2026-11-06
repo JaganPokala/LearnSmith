@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Auth0Provider } from '@auth0/auth0-react';
-import { setTokenSource } from '../lib/api.js';
+import { ApiError, setTokenSource } from '../lib/api.js';
 import { useAuth, AUTH_ENABLED, DOMAIN, CLIENT_ID, AUDIENCE } from '../lib/auth.js';
 
 /**
@@ -23,10 +23,12 @@ function TokenBridge() {
       try {
         return await getAccessTokenSilently();
       } catch {
-        // Throws when the session is gone or renewal fails. Returning null
-        // sends the request with no header — a clean 401 from our own
-        // middleware, rather than an unhandled rejection inside fetch.
-        return null;
+        // A signed-in user's renewal failure must not turn a paid request
+        // into an anonymous generation owned by a guest identity.
+        throw new ApiError('Your session has expired. Sign in again.', {
+          code: 'invalid_token',
+          status: 401,
+        });
       }
     });
 

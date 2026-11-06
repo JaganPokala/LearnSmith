@@ -20,6 +20,19 @@
  */
 function table(noun) {
   return {
+    daily_quota_exceeded: {
+      title: 'Daily generation limit reached',
+      retry: false,
+    },
+    burst_limit_exceeded: {
+      title: 'Please slow down',
+      retry: false,
+    },
+    tracking_unavailable: {
+      title: 'Generation is temporarily unavailable',
+      detail: 'Please try again later.',
+      retry: true,
+    },
     // ── the generation failed. Trying again genuinely helps: a different
     //    sampling of the model usually succeeds where one attempt did not.
     ai_unavailable: {
@@ -145,7 +158,11 @@ function table(noun) {
 export function describeError(error, noun = 'course') {
   const entry = table(noun)[error?.code];
 
-  if (entry) return entry;
+  if (entry) {
+    return ['daily_quota_exceeded', 'burst_limit_exceeded'].includes(error?.code)
+      ? { ...entry, detail: error.message }
+      : entry;
+  }
 
   return {
     title: error?.message ?? 'Something went wrong',

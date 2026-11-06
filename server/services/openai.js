@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import { config } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
+import { generationTracker } from './generationTracking.js';
 
 // Built once at module load. maxRetries: 0 because the SDK otherwise retries
 // twice, silently, with backoff — a call you time at 40s might be three
@@ -40,77 +41,89 @@ const client = new OpenAI({
  * @param {number} [args.maxTokens]    output cap; omit for the model default
  * @returns {Promise<{ text: string, ms: number, usage: object, finishReason: string }>}
  */
-export async function generateJSON({ messages, schema, schemaName, maxTokens }) {
-  const startedAt = performance.now();
+export function createJSONGenerator({
+  complete = (body) => client.chat.completions.create(body),
+  tracker = generationTracker,
+} = {}) {
+  return async function generateJSON({ messages, schema, schemaName, maxTokens, tracking }) {
+    const call = await tracker.start({ ...tracking, requestedModel: config.OPENAI_TEXT_MODEL });
+    const startedAt = performance.now();
 
-  let res;
+    let res;
 
-  try {
-    res = await client.chat.completions.create({
-      model: config.OPENAI_TEXT_MODEL,
-      messages,
+    try {
+      res = await complete({
+        model: config.OPENAI_TEXT_MODEL,
+        service_tier: 'default',
+        messages,
 
-      // Spread so an omitted maxTokens sends no key at all.
-      ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
+        // Spread so an omitted maxTokens sends no key at all.
+        ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
 
-      // Structured outputs: this is what makes the model produce OUR field
-      // names and no markdown fence. A bare JSON.parse failed 2/2 without it.
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: schemaName,
-          strict: true,
-          schema,
+        // Structured outputs: this is what makes the model produce OUR field
+        // names and no markdown fence. A bare JSON.parse failed 2/2 without it.
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: schemaName,
+            strict: true,
+            schema,
+          },
         },
-      },
-    });
-  } catch (err) {
-    // 502 not 500 — the failure is upstream. err.status distinguishes a 429
-    // (rate limit) from a 401 (bad key); those have different fixes.
-    throw new ApiError(
-      502,
-      'ai_unavailable',
-      `OpenAI request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+      });
+    } catch (err) {
+      await tracker.failure(call, err, Math.round(performance.now() - startedAt));
+      // 502 not 500 — the failure is upstream. err.status distinguishes a 429
+      // (rate limit) from a 401 (bad key); those have different fixes.
+      throw new ApiError(
+        502,
+        'ai_unavailable',
+        `OpenAI request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+      );
+    }
+
+    const ms = Math.round(performance.now() - startedAt);
+    // Persist usage even if truncation, refusal, parsing, or validation fails later.
+    await tracker.response(call, res, ms);
+
+    const choice = res.choices?.[0];
+    const finishReason = choice?.finish_reason;
+    const text = choice?.message?.content ?? null;
+
+    // THE TRUNCATION TRAP: 'length' means it hit the token cap MID-JSON. The text
+    // looks valid but is incomplete, so without this check a truncated response
+    // is indistinguishable from a malformed one and you debug the parser instead
+    // of raising the cap.
+    if (finishReason === 'length') {
+      throw new ApiError(
+        502,
+        'ai_truncated',
+        `The model hit the token cap mid-JSON after ${ms}ms (max_completion_tokens: ${maxTokens ?? 'model default'}). The response is incomplete, not malformed - raise the cap.`
+      );
+    }
+
+    // A refusal returns 200 with null content.
+    if (!text) {
+      throw new ApiError(
+        502,
+        'ai_empty',
+        `The model returned no content after ${ms}ms (finish_reason: ${finishReason ?? 'unknown'}). A refusal looks like this.`
+      );
+    }
+
+    // The only place that knows what a call cost. Without it, "why is generation
+    // slow" and "why is my bill growing" are both unanswerable.
+    trace(
+      `  openai: ${config.OPENAI_TEXT_MODEL} ${ms}ms` +
+        ` prompt=${res.usage?.prompt_tokens ?? '?'} completion=${res.usage?.completion_tokens ?? '?'}` +
+        ` finish=${finishReason}`
     );
-  }
 
-  const ms = Math.round(performance.now() - startedAt);
-
-  const choice = res.choices?.[0];
-  const finishReason = choice?.finish_reason;
-  const text = choice?.message?.content ?? null;
-
-  // THE TRUNCATION TRAP: 'length' means it hit the token cap MID-JSON. The text
-  // looks valid but is incomplete, so without this check a truncated response
-  // is indistinguishable from a malformed one and you debug the parser instead
-  // of raising the cap.
-  if (finishReason === 'length') {
-    throw new ApiError(
-      502,
-      'ai_truncated',
-      `The model hit the token cap mid-JSON after ${ms}ms (max_completion_tokens: ${maxTokens ?? 'model default'}). The response is incomplete, not malformed - raise the cap.`
-    );
-  }
-
-  // A refusal returns 200 with null content.
-  if (!text) {
-    throw new ApiError(
-      502,
-      'ai_empty',
-      `The model returned no content after ${ms}ms (finish_reason: ${finishReason ?? 'unknown'}). A refusal looks like this.`
-    );
-  }
-
-  // The only place that knows what a call cost. Without it, "why is generation
-  // slow" and "why is my bill growing" are both unanswerable.
-  trace(
-    `  openai: ${config.OPENAI_TEXT_MODEL} ${ms}ms` +
-      ` prompt=${res.usage?.prompt_tokens ?? '?'} completion=${res.usage?.completion_tokens ?? '?'}` +
-      ` finish=${finishReason}`
-  );
-
-  return { text, ms, usage: res.usage, finishReason };
+    return { text, ms, usage: res.usage, finishReason };
+  };
 }
+
+export const generateJSON = createJSONGenerator();
 
 /**
  * Ask the model for plain text. No schema, no JSON — used for translation,

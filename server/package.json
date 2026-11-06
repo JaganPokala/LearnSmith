@@ -9,13 +9,20 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "verify:generation": "node scripts/verifyGeneration.js",
+    "verify:quota": "node scripts/verifyQuota.js",
+    "verify:controllers": "node scripts/verifyGenerationController.js",
+    "verify:accounting": "node scripts/verifyCostTracking.js",
+    "verify:bursts": "node scripts/verifyBurstLimits.js"
   },
   "dependencies": {
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-oauth2-jwt-bearer": "^1.10.0",
+    "express-rate-limit": "^8.7.3",
     "mongoose": "^9.9.4",
     "morgan": "^1.11.0",
     "openai": "^7.8.0"

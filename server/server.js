@@ -8,15 +8,24 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+
 
 import { config, features, describeConfig } from './config/env.js';
 
 import healthRouter from './routes/health.js';
 import coursesRouter from './routes/courses.js';
 import lessonsRouter from './routes/lessons.js';
+import usageRouter from './routes/usage.js';
 import { notFound, errorHandler } from './middlewares/errorHandler.js';
 import { requestTrace, traceError } from './middlewares/trace.js';
 import { attachUser } from './middlewares/auth.js';
+import { sessionLimiter } from './middlewares/burstLimits.js';
+import {
+  attachGuest,
+  initializeGuestSession,
+} from './middlewares/guest.js';
+
 import { connectDB, disconnectDB } from './config/db.js';
 
 const app = express();
@@ -84,16 +93,36 @@ app.get('/', (req, res) => {
   });
 });
 
-// Before every router, after express.json. It never rejects — it only decides
-// whether this request is a signed-in user or the shared guest — so it is safe
-// to run in front of routes that are deliberately public.
-app.use(attachUser);
-
-// Mount path and route path concatenate: '/' inside health.js becomes
-// /api/health.
+// Health checks do not require a guest cookie or login.
 app.use('/api/health', healthRouter);
+
+// Read cookies first.
+app.use(
+  '/api',
+  cookieParser(config.GUEST_COOKIE_SECRET),
+  attachGuest,
+);
+
+// This endpoint must run BEFORE attachUser,
+// because its purpose is to establish the missing guest cookie.
+app.post('/api/session', sessionLimiter, initializeGuestSession);
+
+// Other API endpoints require an established identity.
+app.use('/api', attachUser);
+
+if (!config.isProduction) {
+  app.get('/api/identity', (req, res) => {
+    res.json({
+      creator: req.creator,
+      identityType: req.identityType,
+    });
+  });
+}
+
+
 app.use('/api/courses', coursesRouter);
 app.use('/api/lessons', lessonsRouter);
+app.use('/api/usage', usageRouter);
 
 // notFound after every real route or it swallows them; errorHandler last,
 // because it only catches errors from middleware above it.

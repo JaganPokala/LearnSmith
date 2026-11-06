@@ -11,7 +11,8 @@
     "verify:usage": "node scripts/verifyUsage.js",
     "verify:reader": "node scripts/verifyReader.js",
     "verify:generation-watch": "node scripts/verifyGenerationWatch.js",
-    "verify:learning": "node scripts/verifyLearning.js"
+    "verify:learning": "node scripts/verifyLearning.js",
+    "verify:sign-in": "node scripts/verifySignIn.js"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.24.1",

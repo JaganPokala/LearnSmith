@@ -1,11 +1,12 @@
 import { useUsage } from '../lib/usageContext.js';
 import { AUTH_ENABLED, useAuth } from '../lib/auth.js';
+import SignInActions from './SignInActions.jsx';
 
 const RESOURCES = [['courses', 'Courses'], ['lessons', 'Lessons'], ['audio', 'Narrations']];
 
 export default function UsagePanel({ compact = false }) {
   const { data, error, pending, ready, refresh } = useUsage();
-  const { isAuthenticated, loginWithRedirect } = useAuth();
+  const { isAuthenticated } = useAuth();
   const reset = data?.resetAt ? new Date(data.resetAt) : null;
   const resetLabel = reset && Number.isFinite(reset.getTime())
     ? new Intl.DateTimeFormat(undefined, {
@@ -52,7 +53,7 @@ export default function UsagePanel({ compact = false }) {
       </div>
       <p className="mt-1 text-xs leading-relaxed text-mute">Saved lessons and audio use no allowance. Generation attempts count even when they fail.</p>
       {AUTH_ENABLED && ready && !isAuthenticated && (
-        <button type="button" onClick={() => loginWithRedirect()} className="mt-2 text-xs text-glow hover:underline">Sign in for higher daily limits</button>
+        <div className="mt-3"><p className="mb-2 text-xs text-mute">Sign in for higher daily limits.</p><SignInActions compact /></div>
       )}
     </section>
   );

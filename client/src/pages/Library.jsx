@@ -7,6 +7,7 @@ import StateMessage from '../components/StateMessage.jsx';
 import PromptForm from '../components/PromptForm.jsx';
 import { SidebarSection, SidebarItem, SidebarFooter } from '../components/Sidebar.jsx';
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
+import SignInActions from '../components/SignInActions.jsx';
 
 /**
  * GET /api/courses — the library.
@@ -18,7 +19,7 @@ import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
  *   one CourseRow each
  */
 export default function LibraryPage() {
-  const { isAuthenticated, isLoading: authLoading, loginWithRedirect } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // The request is held until we know who is asking. On a cold load the token
   // is not ready for the first render or two, and firing early earns a 401 the
@@ -77,13 +78,7 @@ export default function LibraryPage() {
           }
           action={
             AUTH_ENABLED ? (
-              <button
-                type="button"
-                onClick={() => loginWithRedirect()}
-                className="border border-accent-line bg-accent-bg px-[13px] py-[6px] text-sm font-semibold text-glow hover:border-glow hover:bg-raised"
-              >
-                Sign in →
-              </button>
+              <SignInActions />
             ) : undefined
           }
         />

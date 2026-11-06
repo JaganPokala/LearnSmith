@@ -1,4 +1,5 @@
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
+import SignInActions from './SignInActions.jsx';
 
 /**
  * Sign in / sign out, pinned to the bottom of the rail.
@@ -7,7 +8,7 @@ import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
  * cannot sign anyone in is worse than no button.
  */
 export default function AccountBlock() {
-  const { isAuthenticated, isLoading, user, loginWithRedirect, logout } = useAuth();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
 
   if (!AUTH_ENABLED) return null;
 
@@ -20,24 +21,15 @@ export default function AccountBlock() {
   if (!isAuthenticated) {
     return (
       <div className={box}>
-        <button
-          type="button"
-          onClick={() => loginWithRedirect()}
-          className="w-full border border-accent-line bg-accent-bg px-3 py-[7px] text-left text-glow hover:border-glow hover:bg-raised"
-        >
-          sign in →
-        </button>
-
-        <p className="mt-2 text-mute">courses you make now are not saved to an account</p>
+        <SignInActions stacked compact />
+        <p className="mt-2 text-mute">Use the same sign-in method to find your saved courses. Guest courses stay separate.</p>
       </div>
     );
   }
 
   return (
     <div className={box}>
-      {/* The name is whatever the connection supplied; email is the only field
-          every connection sets, so it is the fallback rather than the first
-          choice. Truncated because a Google display name can be long. */}
+      {/* Profile claims are optional, so both name and email have fallbacks. */}
       <p className="truncate text-dim" title={user?.email ?? ''}>
         {user?.name ?? user?.email ?? 'signed in'}
       </p>

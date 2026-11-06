@@ -3,6 +3,7 @@ import PromptForm from '../components/PromptForm.jsx';
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
 import { useFeatures } from '../hooks/useFeatures.js';
 import UsagePanel from '../components/UsagePanel.jsx';
+import SignInActions from '../components/SignInActions.jsx';
 
 /**
  * The public landing page — the "Console" direction, dark throughout.
@@ -117,7 +118,7 @@ const HEADLINE_GLOW = {
 const ACCENT_GLOW = { textShadow: '0 0 34px rgba(34,211,238,.72)' };
 
 export default function LandingPage() {
-  const { isAuthenticated, isLoading, user, loginWithRedirect, logout } = useAuth();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
 
   // The same flag the lesson page gates AudioPlayer on. Narration needs an
   // OpenAI key on the server, so a deployment without one must not be sold
@@ -136,7 +137,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0a0c0f] text-[#c9d1da]">
       {/* ───────────────────── NAV ───────────────────── */}
-      <nav className="flex items-center gap-4 border-b border-[#191f26] px-5 py-4 sm:gap-6 sm:px-8">
+      <nav className="flex flex-wrap items-center gap-4 border-b border-[#191f26] px-5 py-4 sm:gap-6 sm:px-8">
         <span className="font-mono text-[15px] font-bold tracking-[-0.03em] text-glow">
           text-to-learn
         </span>
@@ -188,13 +189,7 @@ export default function LandingPage() {
               Sign out
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => loginWithRedirect()}
-              className="shrink-0 border border-accent-line bg-accent-bg px-[14px] py-[7px] text-[14px] font-semibold text-glow hover:border-glow hover:bg-raised"
-            >
-              Sign in
-            </button>
+            <SignInActions compact />
           )
         )}
       </nav>

@@ -25,13 +25,11 @@ api.get('/api/health').catch(() => {});
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* AuthProvider OUTSIDE BrowserRouter: Auth0 finishes a login by replacing
-        the URL, and the router has to read the result of that, not race it.
-        A passthrough entirely when Auth0 is not configured. */}
-    <AuthProvider>
-      <UsageProvider>
-      {/* BrowserRouter must wrap everything that uses Link, useParams, etc. */}
-      <BrowserRouter>
+    {/* The provider's redirect callback uses Router navigation to restore the
+        intended app page and remove callback parameters after login. */}
+    <BrowserRouter>
+      <AuthProvider>
+        <UsageProvider>
         <Routes>
           {/* 1. The landing page sits OUTSIDE the app shell — it has no sidebar.
                  path="/" element={<LandingPage />} */}
@@ -69,8 +67,8 @@ createRoot(document.getElementById('root')).render(
 
           <Route path="*" element={<NotFoundPage />} />
           </Routes>
-      </BrowserRouter>
-      </UsageProvider>
-    </AuthProvider>
+        </UsageProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </StrictMode>,
 );

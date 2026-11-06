@@ -1,7 +1,17 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Auth0Provider } from '@auth0/auth0-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, setTokenSource } from '../lib/api.js';
 import { useAuth, AUTH_ENABLED, DOMAIN, CLIENT_ID, AUDIENCE } from '../lib/auth.js';
+import { safeReturnTo, signInErrorMessage } from '../lib/signIn.js';
+
+function AuthenticationNotice() {
+  const { error, isLoading, isAuthenticated } = useAuth();
+  if (!error || isLoading || isAuthenticated) return null;
+  return <div role="alert" className="border-b border-danger-line bg-danger-bg px-4 py-3 text-sm text-danger">
+    {signInErrorMessage(error)} <Link to="/courses" className="underline">Return to sign-in</Link>
+  </div>;
+}
 
 /**
  * Gives lib/api.js a way to fetch the current token, and takes it away again on
@@ -46,14 +56,22 @@ function TokenBridge() {
  * @param {React.ReactNode} props.children
  */
 export default function AuthProvider({ children }) {
+  const navigate = useNavigate();
+  const onRedirectCallback = useCallback((appState) => {
+    // Notify React Router as well as replacing the callback URL. A plain
+    // history.replaceState would leave the router rendering the old page.
+    navigate(safeReturnTo(appState?.returnTo), { replace: true });
+  }, [navigate]);
   if (!AUTH_ENABLED) return children;
 
   return (
     <Auth0Provider
       domain={DOMAIN}
       clientId={CLIENT_ID}
+      onRedirectCallback={onRedirectCallback}
       authorizationParams={{
         redirect_uri: window.location.origin,
+        scope: 'openid profile email',
 
         // THE ONE THAT COSTS AN AFTERNOON. Without `audience`, Auth0 issues an
         // OPAQUE token instead of a JWT. Login succeeds, the token looks real,
@@ -69,6 +87,7 @@ export default function AuthProvider({ children }) {
       useRefreshTokens
     >
       <TokenBridge />
+      <AuthenticationNotice />
       {children}
     </Auth0Provider>
   );

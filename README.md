@@ -38,6 +38,7 @@ Everything the model returns is checked against a hand-written contract before i
 - **Hinglish narration** — lesson prose is translated to Roman-script Hinglish, then spoken. Technical terms stay in English, because that's how they're said out loud.
 - **PDF export** — the browser's own print pipeline against a print stylesheet. Real selectable text, not a screenshot.
 - **Try without an account** — generation is open to guests; only your saved library needs a login.
+- **Google sign-in through Auth0** — explicit Google buttons alongside Universal Login, with safe post-login navigation and understandable login errors. Configure the tenant's Google connection before using this in a deployment.
 
 ---
 
@@ -311,6 +312,41 @@ Run `npm run verify:course-context` from `server/` for ordered context, first/mi
 Run `npm run verify:learning` from `server/` for progress/quiz ownership, guest isolation, concurrent completion, server grading, idempotent submissions, retakes, version changes, cursor pages, library summaries, and deletion cleanup. It uses the isolated Atlas test database and no provider calls. Run the same command from `client/` for saved-state acknowledgement, stale responses, account/lesson isolation, history refresh failures, original question indexing, and ensuring learning writes do not emit generation events. The client checks need no backend or database.
 
 ### 4. Run
+
+#### Google login setup
+
+The existing Auth0 application and API stay in use. Enable the `google-oauth2`
+social connection for the frontend application. The Google button passes that
+connection to Auth0; the other button opens Universal Login for existing methods.
+
+For your own Google credentials, create a Google Cloud OAuth client of type
+**Web application**. Its JavaScript origin is `https://YOUR_AUTH0_DOMAIN` and its
+redirect URI is `https://YOUR_AUTH0_DOMAIN/login/callback`. Enter its Client ID
+and Client Secret in **Auth0 → Authentication → Social → google-oauth2**. Secrets
+belong in Auth0, not a `VITE_*` variable. Auth0's shared developer keys are for
+development; replace them with your own credentials before production. See the
+[Auth0 Google setup guide](https://auth0.com/blog/adding-google-login-to-react-app-with-auth0/).
+
+These Google-to-Auth0 callback settings are separate from Auth0's application
+callback/logout/web-origin allowlists, which include the exact frontend origins
+such as `http://localhost:5173` and the deployed Vercel origin. Configure the
+Google consent screen/audience and add test users if applicable to the app's
+Google publishing status. Only basic sign-in/profile permissions are needed.
+
+After login, Auth0 issues the access token for this app's API audience. Existing
+backend JWT verification and owner checks apply to all providers. Ownership uses
+the verified subject claim; matching email addresses do not merge Google and
+password identities. Guest courses also stay separate from the account library.
+
+The app returns to `/courses` after sign-in, using React Router navigation to
+remove callback parameters. Return targets are limited to local app routes.
+Run `npm run verify:sign-in` from `client/` for connection selection, safe return
+targets, and safe error messages. Fake-provider browser checks cover failed login,
+callback routing, authenticated library reads, refresh, sign-out, existing sign-in
+options, and narrow layout. A real Google round trip must also be checked after
+the tenant connection is configured.
+
+#### Start the app
 
 ```bash
 cd server && npm run dev     # http://localhost:5000

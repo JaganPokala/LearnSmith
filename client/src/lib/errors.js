@@ -115,7 +115,27 @@ function table(noun) {
     },
     tts_unavailable: {
       title: 'Narration is not available right now',
-      detail: 'The speech service did not answer. Nothing was charged and nothing was saved.',
+      detail: 'Audio could not finish. Some generation work may already have completed.',
+      retry: true,
+    },
+    audio_generation_in_progress: {
+      title: 'Narration is already being generated',
+      detail: 'Wait a little, then check again for saved audio.',
+      retry: true,
+    },
+    audio_claim_lost: {
+      title: 'This narration attempt expired',
+      detail: 'Check for saved audio before starting another attempt.',
+      retry: true,
+    },
+    audio_too_long: {
+      title: 'This narration is too long',
+      detail: 'Try audio for a shorter lesson.',
+      retry: false,
+    },
+    audio_invalid: {
+      title: 'Narration could not be completed',
+      detail: 'Some generation work may already have completed.',
       retry: true,
     },
 

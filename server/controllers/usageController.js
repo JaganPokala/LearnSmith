@@ -16,15 +16,17 @@ export async function getUsage(req, res) {
     GenerationCall.aggregate([
       { $match: {
         creator,
-        operation: { $in: ['course', 'lesson'] },
+        operation: { $in: ['course', 'lesson', 'audio_translation', 'audio_speech'] },
         createdAt: { $gte: start, $lt: end },
       } },
       { $group: {
-        _id: null,
+        _id: { $cond: [{ $in: ['$operation', ['course', 'lesson']] }, 'text', 'audio'] },
         calls: { $sum: 1 },
         knownInputTokens: { $sum: { $ifNull: ['$inputTokens', 0] } },
         knownCachedInputTokens: { $sum: { $ifNull: ['$cachedInputTokens', 0] } },
         knownOutputTokens: { $sum: { $ifNull: ['$outputTokens', 0] } },
+        knownInputChars: { $sum: { $ifNull: ['$inputChars', 0] } },
+        knownOutputBytes: { $sum: { $ifNull: ['$outputBytes', 0] } },
         knownEstimatedCostUsd: { $sum: { $ifNull: ['$estimatedCostUsd', 0] } },
         unpricedCalls: { $sum: { $cond: [
           { $eq: [{ $ifNull: ['$estimatedCostUsd', null] }, null] }, 1, 0,
@@ -40,13 +42,21 @@ export async function getUsage(req, res) {
     ]),
   ]);
 
-  const { _id, ...calls } = totals[0] ?? {
-    calls: 0, knownInputTokens: 0, knownCachedInputTokens: 0,
-    knownOutputTokens: 0, knownEstimatedCostUsd: 0, unpricedCalls: 0,
-    unknownOutcomeCalls: 0, rejectedContentCalls: 0, incompleteUsageCalls: 0,
-  };
+  function summary(group, scope) {
+    const { _id, ...calls } = totals.find((row) => row._id === group) ?? {
+      calls: 0, knownInputTokens: 0, knownCachedInputTokens: 0,
+      knownOutputTokens: 0, knownInputChars: 0, knownOutputBytes: 0,
+      knownEstimatedCostUsd: 0, unpricedCalls: 0,
+      unknownOutcomeCalls: 0, rejectedContentCalls: 0, incompleteUsageCalls: 0,
+    };
+    return {
+      scope, ...calls,
+      estimatedCostUsd: calls.unpricedCalls ? null : Number(calls.knownEstimatedCostUsd.toFixed(12)),
+      costStatus: calls.unpricedCalls ? 'partial' : (calls.calls ? 'estimated' : 'no_calls'),
+    };
+  }
 
-  const quota = Object.fromEntries(['courses', 'lessons'].map((resource) => {
+  const quota = Object.fromEntries(['courses', 'lessons', 'audio'].map((resource) => {
     const used = usage?.[resource] ?? 0;
     return [resource, { used, limit: limits[resource], remaining: Math.max(0, limits[resource] - used) }];
   }));
@@ -54,13 +64,7 @@ export async function getUsage(req, res) {
   res.set('Cache-Control', 'private, no-store');
   res.json({
     day, resetAt: end.toISOString(), quota,
-    generation: {
-      scope: 'course_and_lesson_text',
-      ...calls,
-      // The known subtotal remains useful, but never present an incomplete
-      // subtotal as a complete cost estimate.
-      estimatedCostUsd: calls.unpricedCalls ? null : Number(calls.knownEstimatedCostUsd.toFixed(12)),
-      costStatus: calls.unpricedCalls ? 'partial' : (calls.calls ? 'estimated' : 'no_calls'),
-    },
+    generation: summary('text', 'course_and_lesson_text'),
+    audio: summary('audio', 'audio_translation_and_speech'),
   });
 }

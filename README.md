@@ -137,15 +137,17 @@ erDiagram
 
 ## Generation limits and accounting
 
-Daily UTC allowances are defined in `server/config/usageLimits.js`: guests receive 1 course outline and 5 lesson bodies; signed-in free users receive 3 outlines and 20 lesson bodies. These initial limits are provisional. Cached lessons and blocked duplicate claims consume no allowance. Admitted attempts consume allowance even if generation later fails. Audio has separate pending protection/accounting work.
+Daily UTC allowances are defined in `server/config/usageLimits.js`: guests receive 1 course outline, 5 lesson bodies, and 2 narrations; signed-in free users receive 3 outlines, 20 lesson bodies, and 10 narrations. These initial limits are provisional. Cached lessons/audio and blocked duplicate claims consume no allowance. Admitted attempts consume allowance even if generation later fails.
 
 Burst limits in `server/config/burstLimits.js` allow 20 generation POSTs per identity per 60-second window, shared across course, lesson, and audio routes. Session setup allows 60 requests per observed IP per window. These counters include cached and rejected requests; blocked requests receive `429` and `Retry-After` before reaching generation or quota consumption. GET routes remain available. Counters live in one process and reset on restart; multiple backend processes would need a shared store such as Redis. Verify the observed client IP through the deployed Vercel-to-Render proxy path before relying on the session IP limit.
 
 Lesson claims use atomic database updates, expiring leases, and attempt IDs. Only the current, unexpired attempt can publish content. Quota checks run after ownership/cache/claim checks and before provider calls; quota rejection releases the lesson claim.
 
+Audio uses its own claim in `LessonAudio`, with a unique lesson index, expiring lease, and attempt ID. The lease is renewed before translation and each speech chunk; an expired owner cannot renew, publish, or clear a replacement claim. Only an explicit **Generate audio** click starts narration. Source/translated text, chunk count, and stored bytes are bounded by `server/config/audioLimits.js`. Partial failures are not automatically retried or refunded. A manual retry starts the narration again, including any earlier successful chunks. Leases protect storage ownership; they cannot undo provider work already started before a crash or expiry.
+
 Each course/lesson provider call has a `GenerationCall` record, including retries and responses rejected by validation. The initial record is saved before calling AI; failure to establish accounting stops new paid work. Usage is saved before truncation or content checks. Unknown outcomes or usage remain unknown rather than zero. A post-response accounting write failure preserves the paid result and emits metadata instead of triggering a duplicate provider call.
 
-`GET /api/usage` returns the current owner's UTC-day allowances and text-generation totals. Token totals are known subtotals; a partial cost report includes `knownEstimatedCostUsd` but leaves `estimatedCostUsd` null. Estimates use versioned standard-tier rates in `server/config/modelPricing.js`; unknown models or unsupported billing modes remain unpriced. This scope excludes audio, hosting, taxes, and account-specific discounts.
+`GET /api/usage` returns the current owner's UTC-day allowances, course/lesson text totals under `generation`, and translation/speech totals under `audio`. Every translation and speech chunk has its own provider record. Translation tokens use the same versioned text rates in `server/config/modelPricing.js`. The binary MP3 response exposes no billed token usage, so speech records preserve input characters, output bytes, and the provider request ID while leaving token/cost fields unknown. A partial cost report includes `knownEstimatedCostUsd` but leaves `estimatedCostUsd` null. Unknown models or unsupported billing modes also remain unpriced. Estimates exclude hosting, taxes, and account-specific discounts.
 
 Browser requests use same-origin `/api` forwarding through Vite locally and Vercel in production. A shared Promise coordinates guest setup within a page; Web Locks serialize setup across supported same-origin tabs. Browsers without Web Locks retain only page-local coordination. These browser mechanisms are not server-side abuse prevention.
 
@@ -178,7 +180,7 @@ Base URL: `http://localhost:5000` in development.
 | `GET` | `/` | — | Service banner — tells "wrong URL" from "server down" |
 | `GET` | `/api/health` | — | `ok`, `uptime`, `env`, `db`, and derived `features` flags |
 | `POST` | `/api/session` | — | Establish or reuse a signed guest cookie |
-| `GET` | `/api/usage` | Guest/account identity | Current UTC-day quotas, known token totals, and cost estimates for course/lesson text |
+| `GET` | `/api/usage` | Guest/account identity | Current UTC-day quotas and separate text/audio usage summaries |
 
 ### Courses
 
@@ -262,6 +264,8 @@ For database verification, set `TEST_MONGO_URI` locally. Scripts explicitly use 
 
 Run `npm run verify:bursts` from `server/` to check burst limits using a temporary local HTTP server. This check needs neither MongoDB nor AI credentials.
 
+Run `npm run verify:audio` from `server/` for audio concurrency, cache, ownership, quota, expiry, chunk limits, partial failures, and accounting checks. It uses the isolated Atlas test database, a temporary local HTTP server, and fake AI responses; there are no paid provider calls.
+
 ### 4. Run
 
 ```bash
@@ -292,6 +296,10 @@ Every optional key is genuinely optional. `/api/health` reports which features a
 **API → Render.** Root directory `server`, build `npm install`, start `npm start`. Set every server variable above, plus `CLIENT_ORIGIN` pointing at your Vercel URL (CORS is an allowlist, never `*`). `SIGTERM` is handled, so redeploys drain in-flight requests instead of 502-ing a generation mid-flight.
 
 **Client → Vercel.** Root directory `client`. `client/vercel.json` forwards `/api` requests to Render before rewriting other paths to `index.html` for client-side routing. `VITE_*` values are baked in **at build time**, so changing one requires a rebuild, not a restart.
+
+Audio remains synchronous. The browser allows up to seven minutes for bounded multi-chunk generation, but the deployed proxy may impose a shorter deadline. Verify long narration through Vercel; a client timeout does not cancel server work. Moving narration to background jobs with status polling remains a future deployment improvement.
+
+The current Speech API integration also needs a planned migration: OpenAI lists the legacy TTS models for shutdown on January 6, 2027. The replacement requires a different API workflow, not just a model-name change. See the [official text-to-speech guide](https://developers.openai.com/api/docs/guides/text-to-speech).
 
 ---
 

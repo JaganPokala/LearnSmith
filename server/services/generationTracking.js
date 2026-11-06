@@ -55,11 +55,11 @@ export function createGenerationTracker({
   CallModel = GenerationCall,
   logError = traceError,
 } = {}) {
-  async function start({ creator, generationId, operation, attemptNumber, requestedModel }) {
+  async function start({ creator, generationId, operation, attemptNumber, requestedModel, inputChars }) {
     if (
       typeof creator !== 'string' || !creator.trim() ||
       typeof generationId !== 'string' || !generationId.trim() ||
-      !['course', 'lesson'].includes(operation) ||
+      !['course', 'lesson', 'audio_translation', 'audio_speech'].includes(operation) ||
       !Number.isSafeInteger(attemptNumber) || attemptNumber < 1 ||
       typeof requestedModel !== 'string' || !requestedModel.trim()
     ) {
@@ -69,7 +69,7 @@ export function createGenerationTracker({
     try {
       await CallModel.init();
       return await CallModel.create({
-        creator, generationId, operation, attemptNumber, requestedModel,
+        creator, generationId, operation, attemptNumber, requestedModel, inputChars,
       });
     } catch {
       // Do not start paid work if its initial accounting record cannot be saved.
@@ -125,6 +125,16 @@ export function createGenerationTracker({
     });
   }
 
+  // The MP3 response exposes bytes and a request ID, not billed token usage.
+  // Characters are useful operational metadata but cannot price mini-TTS.
+  async function speechResponse(call, res, durationMs, outputBytes) {
+    return finish(call, {
+      outcome: 'response_received', durationMs, outputBytes,
+      providerRequestId: res.headers?.get('x-request-id') ?? null,
+      costStatus: 'missing_usage', estimatedCostUsd: null,
+    });
+  }
+
   async function validation(context, status, errorCode = null) {
     try {
       const result = await CallModel.updateOne(
@@ -145,7 +155,7 @@ export function createGenerationTracker({
     }
   }
 
-  return { start, response, failure, validation };
+  return { start, response, speechResponse, failure, validation };
 }
 
 export const generationTracker = createGenerationTracker();

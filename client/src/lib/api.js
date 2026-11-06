@@ -30,6 +30,9 @@ const READ_TIMEOUT_MS = 20_000;
  * pay for the tokens either way.
  */
 const GENERATE_TIMEOUT_MS = 75_000;
+// One translation (30s) plus at most four sequential speech chunks (90s each),
+// with margin for database work. A proxy may impose a shorter deadline.
+const AUDIO_TIMEOUT_MS = 420_000;
 
 /**
  * How to get the current access token, or null when nobody is signed in.
@@ -176,7 +179,7 @@ export const api = {
   /** Read binary. Returns a Blob; 404s throw like any other request. */
   getBlob: (path) => request(path, { parse: 'blob' }),
 
-  /** Generate binary. Long deadline: synthesis took 24s when measured. */
+  /** Generate binary, allowing bounded multi-chunk narration to finish. */
   postBlob: (path) =>
-    request(path, { method: 'POST', parse: 'blob', timeoutMs: GENERATE_TIMEOUT_MS }),
+    request(path, { method: 'POST', parse: 'blob', timeoutMs: AUDIO_TIMEOUT_MS }),
 };

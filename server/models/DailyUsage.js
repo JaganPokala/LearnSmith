@@ -22,6 +22,14 @@ const dailyUsageSchema = new mongoose.Schema(
       validate: Number.isInteger,
     },
 
+    audio: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      validate: Number.isInteger,
+    },
+
     lessons: {
       type: Number,
       required: true,

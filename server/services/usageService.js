@@ -13,7 +13,7 @@ export async function consumeDailyQuota({
   }
 
   // Only these counter names are allowed.
-  if (resource !== 'courses' && resource !== 'lessons') {
+  if (!['courses', 'lessons', 'audio'].includes(resource)) {
     throw new Error('Unknown quota resource.');
   }
 
@@ -39,6 +39,7 @@ export async function consumeDailyQuota({
           day,
           courses: 0,
           lessons: 0,
+          audio: 0,
         },
       },
       {
@@ -64,7 +65,8 @@ export async function consumeDailyQuota({
     {
       creator,
       day,
-      [resource]: { $lt: limit },
+      // Older daily records have no audio counter. Treat that field as zero.
+      $or: [{ [resource]: { $lt: limit } }, { [resource]: { $exists: false } }],
     },
     {
       $inc: {

@@ -14,7 +14,8 @@
     "verify:quota": "node scripts/verifyQuota.js",
     "verify:controllers": "node scripts/verifyGenerationController.js",
     "verify:accounting": "node scripts/verifyCostTracking.js",
-    "verify:bursts": "node scripts/verifyBurstLimits.js"
+    "verify:bursts": "node scripts/verifyBurstLimits.js",
+    "verify:audio": "node scripts/verifyAudio.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

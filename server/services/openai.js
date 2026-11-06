@@ -8,6 +8,7 @@ import { config } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace } from '../middlewares/trace.js';
 import { generationTracker } from './generationTracking.js';
+import { AUDIO_LIMITS } from '../config/audioLimits.js';
 
 // Built once at module load. maxRetries: 0 because the SDK otherwise retries
 // twice, silently, with backoff — a call you time at 40s might be three
@@ -135,51 +136,64 @@ export const generateJSON = createJSONGenerator();
  * @param {number} [args.maxTokens]
  * @returns {Promise<{ text: string, ms: number }>}
  */
-export async function generateText({ messages, maxTokens }) {
-  const startedAt = performance.now();
+export function createTextGenerator({
+  complete = (body) => client.chat.completions.create(body),
+  tracker = generationTracker,
+} = {}) {
+  return async function generateText({ messages, maxTokens, tracking }) {
+    const call = await tracker.start({ ...tracking, requestedModel: config.OPENAI_TEXT_MODEL });
+    const startedAt = performance.now();
 
-  let res;
+    let res;
 
-  try {
-    res = await client.chat.completions.create({
-      model: config.OPENAI_TEXT_MODEL,
-      messages,
-      ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
-    });
-  } catch (err) {
-    throw new ApiError(
-      502,
-      'ai_unavailable',
-      `OpenAI text request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+    try {
+      res = await complete({
+        model: config.OPENAI_TEXT_MODEL,
+        service_tier: 'default',
+        messages,
+        ...(maxTokens ? { max_completion_tokens: maxTokens } : {}),
+      });
+    } catch (err) {
+      await tracker.failure(call, err, Math.round(performance.now() - startedAt));
+      throw new ApiError(
+        502,
+        'ai_unavailable',
+        `OpenAI text request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+      );
+    }
+
+    const ms = Math.round(performance.now() - startedAt);
+    await tracker.response(call, res, ms);
+    const choice = res.choices?.[0];
+
+    // Same truncation trap as generateJSON: 'length' means it hit the cap
+    // mid-sentence, and half a translation reads as a complete one.
+    if (choice?.finish_reason === 'length') {
+      await tracker.validation(tracking, 'rejected', 'ai_truncated');
+      throw new ApiError(
+        502,
+        'ai_truncated',
+        `The model hit the token cap mid-text after ${ms}ms (max_completion_tokens: ${maxTokens ?? 'model default'}).`
+      );
+    }
+
+    const text = choice?.message?.content ?? '';
+
+    if (!text.trim()) {
+      await tracker.validation(tracking, 'rejected', 'ai_empty');
+      throw new ApiError(502, 'ai_empty', `The model returned no text after ${ms}ms.`);
+    }
+
+    trace(
+      `  openai: ${config.OPENAI_TEXT_MODEL} text ${ms}ms` +
+        ` prompt=${res.usage?.prompt_tokens ?? '?'} completion=${res.usage?.completion_tokens ?? '?'}`
     );
-  }
 
-  const ms = Math.round(performance.now() - startedAt);
-  const choice = res.choices?.[0];
-
-  // Same truncation trap as generateJSON: 'length' means it hit the cap
-  // mid-sentence, and half a translation reads as a complete one.
-  if (choice?.finish_reason === 'length') {
-    throw new ApiError(
-      502,
-      'ai_truncated',
-      `The model hit the token cap mid-text after ${ms}ms (max_completion_tokens: ${maxTokens ?? 'model default'}).`
-    );
-  }
-
-  const text = choice?.message?.content ?? '';
-
-  if (!text.trim()) {
-    throw new ApiError(502, 'ai_empty', `The model returned no text after ${ms}ms.`);
-  }
-
-  trace(
-    `  openai: ${config.OPENAI_TEXT_MODEL} text ${ms}ms` +
-      ` prompt=${res.usage?.prompt_tokens ?? '?'} completion=${res.usage?.completion_tokens ?? '?'}`
-  );
-
-  return { text: text.trim(), ms };
+    return { text: text.trim(), ms };
+  };
 }
+
+export const generateText = createTextGenerator();
 
 /**
  * Text to speech. Returns raw BYTES, not a URL — the caller decides where they
@@ -194,38 +208,56 @@ export async function generateText({ messages, maxTokens }) {
  * @param {string} [args.instructions]  how to say it - accent, pace, tone
  * @returns {Promise<{ bytes: Buffer, ms: number }>}
  */
-export async function synthesizeSpeech({ text, voice = 'alloy', instructions }) {
-  const startedAt = performance.now();
+export function createSpeechSynthesizer({
+  synthesize = (body, options) => client.audio.speech.create(body, options),
+  tracker = generationTracker,
+} = {}) {
+  return async function synthesizeSpeech({ text, voice = 'alloy', instructions, tracking }) {
+    if (typeof text !== 'string' || !text.trim() || text.length > AUDIO_LIMITS.chunkChars) {
+      throw new ApiError(400, 'audio_too_long', 'Narration text exceeds the speech input limit.');
+    }
+    const call = await tracker.start({
+      ...tracking, requestedModel: config.OPENAI_TTS_MODEL, inputChars: text.length,
+    });
+    const startedAt = performance.now();
 
-  let res;
+    let res;
 
-  try {
-    res = await client.audio.speech.create(
-      {
-        model: config.OPENAI_TTS_MODEL,
-        voice,
-        input: text,
-        // mp3 rather than the default-by-accident: it is the one format every
-        // browser plays from a blob without a codec negotiation.
-        response_format: 'mp3',
-        ...(instructions ? { instructions } : {}),
-      },
-      { timeout: 90_000 }
-    );
-  } catch (err) {
-    throw new ApiError(
-      502,
-      'tts_unavailable',
-      `OpenAI speech request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
-    );
-  }
+    try {
+      res = await synthesize(
+        {
+          model: config.OPENAI_TTS_MODEL,
+          voice,
+          input: text,
+          // mp3 rather than the default-by-accident: it is the one format every
+          // browser plays from a blob without a codec negotiation.
+          response_format: 'mp3',
+          ...(instructions ? { instructions } : {}),
+        },
+        { timeout: 90_000 }
+      );
 
-  const bytes = Buffer.from(await res.arrayBuffer());
-  const ms = Math.round(performance.now() - startedAt);
-
-  trace(
-    `  openai: ${config.OPENAI_TTS_MODEL} speech ${ms}ms, ${text.length} chars -> ${Math.round(bytes.length / 1024)}KB`
-  );
-
-  return { bytes, ms };
+      // Reading the binary body can fail after headers arrive. Keep it inside
+      // the tracked failure path; the billed outcome is then unknown.
+      const bytes = Buffer.from(await res.arrayBuffer());
+      const ms = Math.round(performance.now() - startedAt);
+      await tracker.speechResponse(call, res, ms, bytes.length);
+      if (!bytes.length || bytes.length > AUDIO_LIMITS.bytes) {
+        await tracker.validation(tracking, 'rejected', 'audio_invalid');
+        throw new ApiError(502, 'audio_invalid', 'The speech service returned unusable narration.');
+      }
+      await tracker.validation(tracking, 'accepted');
+      return { bytes, ms };
+    } catch (err) {
+      if (err.code === 'audio_invalid') throw err;
+      await tracker.failure(call, err, Math.round(performance.now() - startedAt));
+      throw new ApiError(
+        502,
+        'tts_unavailable',
+        `OpenAI speech request failed after ${Math.round(performance.now() - startedAt)}ms (upstream status ${err.status ?? 'none'}): ${err.message}`
+      );
+    }
+  };
 }
+
+export const synthesizeSpeech = createSpeechSynthesizer();

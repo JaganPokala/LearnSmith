@@ -10,9 +10,8 @@ import { generateText, synthesizeSpeech } from './openai.js';
 import { narrationText, chunkForSpeech } from './narration.js';
 import { trace } from '../middlewares/trace.js';
 import { ApiError } from '../middlewares/errorHandler.js';
-
-/** OpenAI's speech endpoint rejects input longer than this. */
-const TTS_LIMIT = 4096;
+import { AUDIO_LIMITS } from '../config/audioLimits.js';
+import { generationTracker } from './generationTracking.js';
 
 /**
  * Latin script on purpose. Devanagari would be more "correct" Hindi, but
@@ -40,41 +39,11 @@ const VOICE_INSTRUCTIONS =
   'a short pause between paragraphs.';
 
 /**
- * @param {string} english
+ * @param {object} lesson
  * @returns {Promise<string>}
  */
-async function toHinglish(english) {
-  const { text, ms } = await generateText({
-    messages: [
-      { role: 'system', content: HINGLISH_SYSTEM },
-      { role: 'user', content: english },
-    ],
-    // Hinglish in Roman script runs longer than its English source - romanised
-    // Hindi words are wordier. Too small a cap truncates mid-sentence, which
-    // reads as a complete translation and is the reason generateText checks
-    // finish_reason.
-    maxTokens: 4000,
-  });
-
-  trace(`  audio: hinglish ${english.length} -> ${text.length} chars in ${ms}ms`);
-
-  return text;
-}
-
-/**
- * Generate the narration audio for one lesson.
- *
- * @param {object} lesson  a Lesson document (or plain object)
- * @returns {Promise<{ bytes: Buffer, chars: number, ms: number }>}
- */
-export async function generateLessonAudio(lesson) {
-  const startedAt = performance.now();
-
+export function prepareNarration(lesson) {
   const english = narrationText(lesson);
-
-  // A backstop, not the real check — the controller rejects unwritten lessons
-  // on `isEnriched` before reaching here. This only catches a written lesson
-  // whose blocks somehow contain no prose at all.
   if (english.length < 50) {
     throw new ApiError(
       400,
@@ -82,37 +51,73 @@ export async function generateLessonAudio(lesson) {
       'This lesson has no prose to read out. Write the lesson first.'
     );
   }
+  if (english.length > AUDIO_LIMITS.sourceChars) {
+    throw new ApiError(400, 'audio_too_long', 'This lesson is too long for narration.');
+  }
+  return english;
+}
 
-  const hinglish = await toHinglish(english);
-
-  // Chunking is a fallback, not the normal path: measured lessons run
-  // 1096-2551 characters against a 4096 limit. It exists because the margin is
-  // thin and translation makes text LONGER, so one long lesson would otherwise
-  // fail at the API instead of here.
-  const chunks = chunkForSpeech(hinglish, TTS_LIMIT);
-
-  const parts = [];
-
-  for (const chunk of chunks) {
-    const { bytes } = await synthesizeSpeech({
-      text: chunk,
-      instructions: VOICE_INSTRUCTIONS,
+export function createLessonAudioGenerator({
+  translate = generateText,
+  speak = synthesizeSpeech,
+  tracker = generationTracker,
+} = {}) {
+  return async function generateLessonAudio(lesson, context = {}) {
+    const startedAt = performance.now();
+    const english = prepareNarration(lesson);
+    const { beforeProviderCall, ...identity } = context;
+    if (typeof beforeProviderCall !== 'function') {
+      throw new ApiError(503, 'tracking_context_invalid', 'An audio claim is required.');
+    }
+    const tracking = { ...identity, operation: 'audio_translation', attemptNumber: 1 };
+    await beforeProviderCall();
+    const { text: hinglish } = await translate({
+      messages: [
+        { role: 'system', content: HINGLISH_SYSTEM },
+        { role: 'user', content: english },
+      ],
+      maxTokens: 4000,
+      tracking,
     });
 
-    parts.push(bytes);
-  }
+    const chunks = chunkForSpeech(hinglish, AUDIO_LIMITS.chunkChars);
+    if (!chunks.length || hinglish.length > AUDIO_LIMITS.translatedChars || chunks.length > AUDIO_LIMITS.chunks) {
+      await tracker.validation(tracking, 'rejected', 'audio_too_long');
+      throw new ApiError(502, 'audio_too_long', 'The translated narration exceeds the audio size limit.');
+    }
+    await tracker.validation(tracking, 'accepted');
 
-  // Concatenating mp3s works because each is a stream of self-describing
-  // frames; players read them back to back. It is not re-encoding, so there is
-  // a hairline seam at each join - inaudible at sentence boundaries, which is
-  // where chunkForSpeech puts them.
-  const bytes = Buffer.concat(parts);
+    const parts = [];
+    let totalBytes = 0;
 
-  const ms = Math.round(performance.now() - startedAt);
+    for (const [index, chunk] of chunks.entries()) {
+      await beforeProviderCall();
+      const { bytes } = await speak({
+        text: chunk,
+        instructions: VOICE_INSTRUCTIONS,
+        tracking: { ...identity, operation: 'audio_speech', attemptNumber: index + 2 },
+      });
+      totalBytes += bytes.length;
+      if (!bytes.length || totalBytes > AUDIO_LIMITS.bytes) {
+        throw new ApiError(502, 'audio_invalid', 'The generated narration exceeds the storage limit.');
+      }
+      parts.push(bytes);
+    }
 
-  trace(
-    `  audio: "${lesson.title}" ${chunks.length} chunk(s), ${hinglish.length} chars -> ${Math.round(bytes.length / 1024)}KB in ${ms}ms`
-  );
+    // Concatenating mp3s works because each is a stream of self-describing
+    // frames; players read them back to back. It is not re-encoding, so there is
+    // a hairline seam at each join - inaudible at sentence boundaries, which is
+    // where chunkForSpeech puts them.
+    const bytes = Buffer.concat(parts);
 
-  return { bytes, chars: hinglish.length, ms };
+    const ms = Math.round(performance.now() - startedAt);
+
+    trace(
+      `  audio: "${lesson.title}" ${chunks.length} chunk(s), ${hinglish.length} chars -> ${Math.round(bytes.length / 1024)}KB in ${ms}ms`
+    );
+
+    return { bytes, chars: hinglish.length, ms };
+  };
 }
+
+export const generateLessonAudio = createLessonAudioGenerator();

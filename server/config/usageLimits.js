@@ -2,11 +2,13 @@ const LIMITS = {
   guest: Object.freeze({
     courses: 1,
     lessons: 5,
+    audio: 2,
   }),
 
   free: Object.freeze({
     courses: 3,
     lessons: 20,
+    audio: 10,
   }),
 };
 

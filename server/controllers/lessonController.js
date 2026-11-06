@@ -12,12 +12,15 @@ import Course from '../models/Course.js';
 import { generateLesson } from '../services/lessonGenerator.js';
 import { creatorOf } from '../middlewares/auth.js';
 import { resolveVideoBlocks } from '../services/youtube.js';
-import { generateLessonAudio } from '../services/audio.js';
-import { LessonAudio } from '../models/LessonAudio.js';
+import { generateLessonAudio, prepareNarration } from '../services/audio.js';
 import { features } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
 import { consumeDailyQuota } from '../services/usageService.js';
+import {
+  findReadyAudio, claimAudioGeneration, renewAudioGeneration,
+  completeAudioGeneration, failAudioGeneration,
+} from '../services/audioGenerationState.js';
 
 import {
   claimLessonGeneration,
@@ -25,11 +28,6 @@ import {
   failLessonGeneration,
 } from '../services/lessonGenerationState.js';
 
-
-/**
- * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
- * where it becomes req.auth.payload.sub. One library, shared by every visitor.
- */
 
 /**
  * POST /api/lessons/:id/generate
@@ -266,7 +264,7 @@ async function ownedLesson(req) {
 export async function getLessonAudio(req, res) {
   await ownedLesson(req);
 
-  const audio = await LessonAudio.findOne({ lesson: req.params.id });
+  const audio = await findReadyAudio(req.params.id);
 
   if (!audio) {
     throw new ApiError(404, 'audio_not_found', 'This lesson has no narration yet.');
@@ -276,8 +274,9 @@ export async function getLessonAudio(req, res) {
 
   res.set('Content-Type', 'audio/mpeg');
   res.set('Content-Length', String(audio.mp3.length));
-  // It is derived from a lesson that rarely changes, and it is expensive.
-  res.set('Cache-Control', 'private, max-age=86400');
+  // Recheck ownership when accounts change in the same browser. The database
+  // cache still avoids provider calls; HTTP caching could bypass this check.
+  res.set('Cache-Control', 'private, no-store');
 
   res.send(audio.mp3);
 }
@@ -285,57 +284,89 @@ export async function getLessonAudio(req, res) {
 /**
  * POST /api/lessons/:id/audio — generate the narration, then return it.
  *
- * Idempotent by storage: a second call returns the stored bytes rather than
- * paying twice.
+ * A database claim admits one job before quota/provider work. Subsequent
+ * requests receive saved bytes or a conflict while that job is active.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */
-export async function generateLessonAudioContent(req, res) {
-  const startedAt = performance.now();
+export function createGenerateLessonAudioContent({
+  generate = generateLessonAudio,
+  consumeQuota = consumeDailyQuota,
+  ttsEnabled = () => features.tts,
+} = {}) {
+  return async function generateLessonAudioContent(req, res) {
+    res.set('Cache-Control', 'private, no-store');
+    const startedAt = performance.now();
 
-  if (!features.tts) {
-    throw new ApiError(503, 'tts_unavailable', 'Audio narration is not configured on this server.');
-  }
+    const lesson = await ownedLesson(req);
 
-  const lesson = await ownedLesson(req);
+    // The REAL signal, not a proxy for it. A character-count guard in audio.js
+    // let an unwritten lesson through whenever its TITLE happened to be long
+    // enough, and paid to read that title aloud. `isEnriched` is what every other
+    // part of the app already uses to mean "this lesson has content".
+    if (!lesson.isEnriched) {
+      throw new ApiError(
+        400,
+        'nothing_to_narrate',
+        'This lesson has not been written yet. Write it first, then it can be read aloud.'
+      );
+    }
 
-  // The REAL signal, not a proxy for it. A character-count guard in audio.js
-  // let an unwritten lesson through whenever its TITLE happened to be long
-  // enough, and paid to read that title aloud. `isEnriched` is what every other
-  // part of the app already uses to mean "this lesson has content".
-  if (!lesson.isEnriched) {
-    throw new ApiError(
-      400,
-      'nothing_to_narrate',
-      'This lesson has not been written yet. Write it first, then it can be read aloud.'
+    const existing = await findReadyAudio(lesson._id);
+
+    if (existing) {
+      trace(`  audio: "${lesson.title}" cache hit, ${Math.round(existing.mp3.length / 1024)}KB`);
+
+      res.set('Content-Type', 'audio/mpeg');
+      return res.send(existing.mp3);
+    }
+
+    // Cached narration remains playable if the speech provider is disabled.
+    if (!ttsEnabled()) {
+      throw new ApiError(503, 'tts_unavailable', 'Audio narration is not configured on this server.');
+    }
+    prepareNarration(lesson); // Reject unusable input before spending allowance.
+
+    const claim = await claimAudioGeneration(lesson._id);
+    if (!claim) {
+      const latest = await findReadyAudio(lesson._id);
+      if (latest) {
+        res.set('Content-Type', 'audio/mpeg');
+        return res.send(latest.mp3);
+      }
+      throw new ApiError(409, 'audio_generation_in_progress', 'Narration is already being generated. Check again shortly.');
+    }
+
+    const context = { lessonId: lesson._id, attemptId: claim.attemptId };
+    const lostClaim = () => new ApiError(
+      409, 'audio_claim_lost', 'This audio attempt expired or was replaced. Check for saved audio before retrying.',
     );
-  }
 
-  const existing = await LessonAudio.findOne({ lesson: lesson._id });
+    try {
+      await consumeQuota({ creator: creatorOf(req), identityType: req.identityType, resource: 'audio' });
+      const { bytes, chars } = await generate(lesson, {
+        creator: creatorOf(req), generationId: claim.attemptId,
+        beforeProviderCall: async () => {
+          if (!(await renewAudioGeneration(context))) throw lostClaim();
+        },
+      });
+      const saved = await completeAudioGeneration({ ...context, bytes, chars });
+      if (!saved) throw lostClaim();
 
-  if (existing) {
-    trace(`  audio: "${lesson.title}" cache hit, ${Math.round(existing.mp3.length / 1024)}KB`);
+      trace(`audio=${lesson._id} attempt=${claim.attemptId} stored in ${Math.round(performance.now() - startedAt)}ms`);
 
-    res.set('Content-Type', 'audio/mpeg');
-    return res.send(existing.mp3);
-  }
-
-  const { bytes, chars } = await generateLessonAudio(lesson);
-
-  // upsert, not create: two clicks a second apart both find no audio and both
-  // generate. The unique index would make the second insert throw; upsert makes
-  // it overwrite instead, so the user gets audio rather than a 500.
-  await LessonAudio.findOneAndUpdate(
-    { lesson: lesson._id },
-    { lesson: lesson._id, mp3: bytes, chars },
-    { upsert: true, new: true }
-  );
-
-  trace(
-    `  audio: "${lesson.title}" stored ${Math.round(bytes.length / 1024)}KB, total ${Math.round(performance.now() - startedAt)}ms`
-  );
-
-  res.set('Content-Type', 'audio/mpeg');
-  res.status(201).send(bytes);
+      res.set('Content-Type', 'audio/mpeg');
+      return res.status(201).send(saved.mp3);
+    } catch (err) {
+      try {
+        await failAudioGeneration(context);
+      } catch {
+        traceError(`Audio cleanup failed: lesson=${lesson._id} attempt=${claim.attemptId}`);
+      }
+      throw err;
+    }
+  };
 }
+
+export const generateLessonAudioContent = createGenerateLessonAudioContent();

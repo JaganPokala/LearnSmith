@@ -27,9 +27,19 @@ const lessonAudioSchema = new mongoose.Schema(
       index: true,
     },
 
-    mp3: { type: Buffer, required: true },
+    // A claim exists before the MP3 does. Read routes filter for stored bytes,
+    // so pending/failed claims are never returned as playable narration.
+    mp3: { type: Buffer },
 
-    /** Characters of Hinglish spoken — what the generation actually cost. */
+    generationStatus: {
+      type: String,
+      enum: ['pending', 'generating', 'ready', 'failed'],
+      default: 'pending',
+    },
+    generationAttemptId: { type: String, default: null },
+    generationLeaseExpiresAt: { type: Date, default: null },
+
+    /** Characters spoken; not a token count or an exact billing amount. */
     chars: { type: Number, default: 0 },
   },
   { timestamps: true }

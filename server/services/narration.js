@@ -87,12 +87,18 @@ export function chunkForSpeech(text, limit) {
   let current = '';
 
   for (const sentence of sentences) {
-    // One sentence longer than the whole limit: nothing to split on, so it goes
-    // out on its own and the caller's API truncates it rather than us silently
-    // dropping it.
+    // Prefer word boundaries for long sentences. A single oversized word must
+    // still be split so no chunk exceeds the provider's hard input limit.
     if (sentence.length > limit) {
       if (current) chunks.push(current.trim());
-      chunks.push(sentence.trim());
+      let remainder = sentence.trim();
+      while (remainder.length > limit) {
+        const space = remainder.lastIndexOf(' ', limit);
+        const end = space > 0 ? space : limit;
+        chunks.push(remainder.slice(0, end));
+        remainder = remainder.slice(end).trimStart();
+      }
+      if (remainder) chunks.push(remainder);
       current = '';
       continue;
     }

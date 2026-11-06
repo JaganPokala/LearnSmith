@@ -22,7 +22,7 @@ const generationCallSchema = new mongoose.Schema(
 
     operation: {
       type: String,
-      enum: ['course', 'lesson'],
+      enum: ['course', 'lesson', 'audio_translation', 'audio_speech'],
       required: true,
     },
 
@@ -70,6 +70,8 @@ const generationCallSchema = new mongoose.Schema(
     inputTokens: { ...tokenCount },
     cachedInputTokens: { ...tokenCount },
     outputTokens: { ...tokenCount },
+    inputChars: { ...tokenCount },
+    outputBytes: { ...tokenCount },
 
     durationMs: {
       type: Number,

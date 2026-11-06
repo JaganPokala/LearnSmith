@@ -6,6 +6,7 @@
 import Course from '../models/Course.js';
 import { randomUUID } from 'node:crypto';
 import Lesson from '../models/Lesson.js';
+import LessonProgress from '../models/LessonProgress.js';
 import { generateCourse } from '../services/courseGenerator.js';
 import { saveCourseTree, deleteCourseTree } from '../services/courseService.js';
 import { creatorOf } from '../middlewares/auth.js';
@@ -117,6 +118,7 @@ export const createCourse = createCourseHandler();
  * @param {import('express').Response} res
  */
 export async function listCourses(req, res) {
+  res.set('Cache-Control', 'private, no-store');
   // The query the { creator: 1, createdAt: -1 } compound index was built for.
   const courses = await Course.find({ creator: creatorOf(req) })
     .select('title description tags createdAt')
@@ -129,7 +131,7 @@ export async function listCourses(req, res) {
   if (courses.length === 0) {
     return res.json({
       count: 0,
-      totals: { courses: 0, lessons: 0, written: 0 },
+      totals: { courses: 0, lessons: 0, written: 0, completed: 0 },
       courses: [],
     });
   }
@@ -157,6 +159,21 @@ export async function listCourses(req, res) {
   // nothing throws.
   const countsByCourse = new Map(counts.map((row) => [String(row._id), row]));
 
+  // One batch for all returned courses, joined to existing lessons so deleted
+  // or unwritten lessons cannot inflate completion counts.
+  const progress = await LessonProgress.aggregate([
+    { $match: { creator: creatorOf(req), course: { $in: courseIds } } },
+    { $lookup: { from: Lesson.collection.name, localField: 'lesson', foreignField: '_id', as: 'currentLesson' } },
+    { $unwind: '$currentLesson' },
+    { $match: { $expr: { $eq: ['$course', '$currentLesson.course'] } } },
+    { $sort: { lastOpenedAt: -1, _id: -1 } },
+    { $group: { _id: '$course',
+      completed: { $sum: { $cond: [{ $and: ['$completed', '$currentLesson.isEnriched'] }, 1, 0] } },
+      lastOpenedAt: { $first: '$lastOpenedAt' }, resumeLessonId: { $first: '$lesson' },
+    } },
+  ]);
+  const progressByCourse = new Map(progress.map((row) => [String(row._id), row]));
+
   // Default 0, not undefined — a half-saved course has no group in the
   // aggregation, and undefined renders as "NaN / NaN" on the card.
   const withCounts = courses.map((course) => {
@@ -166,6 +183,9 @@ export async function listCourses(req, res) {
       ...course,
       lessonCount: row?.lessonCount ?? 0,
       writtenCount: row?.writtenCount ?? 0,
+      completedLessonCount: progressByCourse.get(String(course._id))?.completed ?? 0,
+      resumeLessonId: progressByCourse.get(String(course._id))?.lastOpenedAt
+        ? String(progressByCourse.get(String(course._id)).resumeLessonId) : null,
     };
   });
 
@@ -177,8 +197,9 @@ export async function listCourses(req, res) {
       courses: acc.courses + 1,
       lessons: acc.lessons + course.lessonCount,
       written: acc.written + course.writtenCount,
+      completed: acc.completed + course.completedLessonCount,
     }),
-    { courses: 0, lessons: 0, written: 0 },
+    { courses: 0, lessons: 0, written: 0, completed: 0 },
   );
 
   res.json({ count: withCounts.length, totals, courses: withCounts });

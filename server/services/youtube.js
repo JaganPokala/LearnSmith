@@ -9,10 +9,11 @@
  * spends one per lesson ever, because the id is stored in the block next to the
  * text and every later read comes from MongoDB.
  *
- * NOTHING IN HERE THROWS. A lesson that fails to find a video is a lesson with
+ * Ordinary YouTube failures do not throw. A failed video search leaves a lesson with
  * a search link, which is exactly what the app does today. Failing the whole
  * generation because YouTube was unhappy would trade a 12-second, billed
  * OpenAI call for nothing.
+ * An optional ownership/deadline guard can stop an abandoned generation.
  */
 
 import { config, features } from '../config/env.js';
@@ -143,7 +144,7 @@ export async function resolveVideo(query) {
  * @param {Array<object>} blocks  lesson.content
  * @returns {Promise<Array<object>>}
  */
-export async function resolveVideoBlocks(blocks) {
+export async function resolveVideoBlocks(blocks, { beforeLookup } = {}) {
   const list = Array.isArray(blocks) ? blocks : [];
 
   if (!features.video) return list;
@@ -159,6 +160,9 @@ export async function resolveVideoBlocks(blocks) {
       continue;
     }
 
+    // Ownership/deadline failures intentionally propagate. Ordinary YouTube
+    // failures still leave the original search block as a fallback.
+    await beforeLookup?.();
     const found = await resolveVideo(block.query);
 
     out.push(found ? { ...block, ...found } : block);

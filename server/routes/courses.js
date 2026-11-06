@@ -7,6 +7,7 @@ import { createCourse, listCourses, getCourse, removeCourse } from '../controlle
 import { requireDatabase } from '../middlewares/requireDatabase.js';
 import { requireUser } from '../middlewares/auth.js';
 import { generationLimiter } from '../middlewares/burstLimits.js';
+import { getCourseProgress } from '../controllers/learningController.js';
 
 const router = Router();
 
@@ -21,6 +22,7 @@ router.get('/', requireUser, listCourses);
 // AFTER /generate: Express matches in registration order and ':id' would match
 // the literal string "generate".
 router.get('/:id', getCourse);
+router.get('/:id/progress', getCourseProgress);
 
 router.delete('/:id', removeCourse);
 

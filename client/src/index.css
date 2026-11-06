@@ -86,6 +86,42 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A reader can be narrow even on a large screen when the course rail is wide.
+   Its own available space, rather than the viewport, decides where the outline fits. */
+.lesson-reader-shell {
+  container: lesson / inline-size;
+}
+
+.lesson-reader-header {
+  max-width: 760px;
+}
+
+.lesson-reader-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 720px);
+  grid-template-areas: "contents" "article";
+  gap: 2rem;
+  align-items: start;
+}
+
+.lesson-reader-article { grid-area: article; }
+.lesson-contents-mobile { grid-area: contents; }
+.lesson-contents-desktop { display: none; grid-area: contents; }
+.lesson-contents-link[aria-current="location"] {
+  color: var(--color-glow);
+  border-left-color: var(--color-glow);
+  background: var(--color-accent-bg);
+}
+
+@container lesson (min-width: 62rem) {
+  .lesson-reader-grid {
+    grid-template-columns: minmax(0, 720px) minmax(180px, 240px);
+    grid-template-areas: "article contents";
+  }
+  .lesson-contents-mobile { display: none; }
+  .lesson-contents-desktop { display: block; align-self: stretch; }
+}
+
 /* ── PRINT ──────────────────────────────────────────────────────────────────
    The whole dark-to-light switch is this one block, because D37 put every
    colour behind a token. Redefine the tokens and every component follows —
@@ -151,6 +187,13 @@ body {
     max-width: none !important;
     margin: 0 !important;
   }
+
+  .lesson-reader-shell { container-type: normal; }
+  .lesson-reader-header { max-width: none; }
+  .lesson-reader-grid { display: block; }
+  .lesson-contents-mobile, .lesson-contents-desktop { display: none !important; }
+  .lesson-section-heading { border: 0; padding-top: 0; }
+  .lesson-reader-article pre { white-space: pre-wrap; overflow: visible; overflow-wrap: anywhere; }
 
   /* A heading alone at the foot of a page, or one orphan line, is the most
      visible thing a print stylesheet can get wrong. */

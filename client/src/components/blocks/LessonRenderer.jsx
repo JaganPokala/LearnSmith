@@ -3,6 +3,8 @@ import ParagraphBlock from './ParagraphBlock.jsx';
 import CodeBlock from './CodeBlock.jsx';
 import VideoBlock from './VideoBlock.jsx';
 import MCQBlock from './MCQBlock.jsx';
+import { lessonBlockId } from '../../lib/lessonReader.js';
+import { useLearning } from '../../lib/learningContext.js';
 
 // 1. The type → component map.
 //
@@ -29,12 +31,13 @@ const BLOCKS = {
  * @param {object} props
  * @param {Array<object>} props.blocks  lesson.content
  */
-export default function LessonRenderer({ blocks }) {
+export default function LessonRenderer({ blocks, sourceOffset = 0 }) {
+  const learning = useLearning();
   // 2. Guard an empty or missing array before mapping. `blocks` is [] for a
   //    lesson that has not been written, and this component should render
   //    nothing rather than an empty <div> with margins.
 
-  if (!blocks?.length) return null;
+  if (!Array.isArray(blocks) || !blocks.length) return null;
 
   // 3. Map over the blocks. For each one:
   //      const Component = BLOCKS[block.type]
@@ -49,7 +52,7 @@ export default function LessonRenderer({ blocks }) {
   return (
     <>
       {blocks.map((block, i) => {
-        const Component = BLOCKS[block.type];
+        const Component = Object.hasOwn(BLOCKS, block?.type) ? BLOCKS[block.type] : null;
 
         // 4. THE UNKNOWN TYPE. Render a VISIBLE fallback — the type name and
         //    the raw JSON, in a bordered box.
@@ -77,7 +80,10 @@ export default function LessonRenderer({ blocks }) {
           );
         }
 
-        return <Component key={i} block={block} />;
+        const questionIndex = i + sourceOffset;
+        const question = block.type === 'mcq' ? learning?.data?.questions.find((item) => item.questionIndex === questionIndex) : null;
+        const key = block.type === 'mcq' ? `${i}:${question?.version ?? 'loading'}:${question?.latestAttempt?.submissionId ?? ''}` : i;
+        return <Component key={key} block={block} id={lessonBlockId(i)} questionIndex={questionIndex} question={question} />;
       })}
     </>
   );

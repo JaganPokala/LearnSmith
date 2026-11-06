@@ -29,9 +29,12 @@ Everything the model returns is checked against a hand-written contract before i
 
 - **Dependency-ordered modules** — foundations first, applications last.
 - **Lessons written on demand** — outline in seconds, bodies on first open, cached after.
+- **Course-aware lessons** — each new lesson receives the course description, ordered outline, its position, and available objectives. Earlier topics describe planned coverage; they do not prove the learner has studied them.
 - **Typed content blocks** — `heading`, `paragraph`, `code`, `video`, `mcq`. The renderer is one lookup table, not a switch.
 - **Real videos, never hallucinated** — the model writes a *search query*; the server resolves it through the YouTube Data API. It can't invent a video id.
 - **Quizzes that explain** — every question carries the reason the right answer is right.
+- **A navigable lesson reader** — readable prose, learning goals, section links with an active-section outline, code copying, and keyboard-accessible self-checks that reveal feedback after submission. The outline adapts to the article's available width, including when the sidebar is resized.
+- **Saved learning activity** — manual lesson completion, course completion counts, resume from the last opened lesson, and server-graded quiz history with retakes. Guests retain activity through their existing guest cookie; account activity follows the verified user identity.
 - **Hinglish narration** — lesson prose is translated to Roman-script Hinglish, then spoken. Technical terms stay in English, because that's how they're said out loud.
 - **PDF export** — the browser's own print pipeline against a print stylesheet. Real selectable text, not a screenshot.
 - **Try without an account** — generation is open to guests; only your saved library needs a login.
@@ -96,6 +99,10 @@ sequenceDiagram
 
 Two layers guard the output: OpenAI **structured outputs** (`response_format: json_schema`) force our field names and drop markdown fences, then `validateCourse` / `validateLesson` check what schemas can't — module counts, empty titles, duplicate sections, answer indices that point at nothing. A failure appends the model's own bad attempt to the conversation and retries once (`MAX_ATTEMPTS = 2`).
 
+Lesson context comes from owner-checked stored course data, never a client-supplied outline. `lessonCourseContext.js` follows the course's module array and each module's lesson array, selects metadata only, and excludes cross-course or mismatched module references. It includes the course description (the existing course goal), current lesson position/objectives, and an ordered outline labeled earlier/current/later. Most unwritten lessons have titles only; objectives are included only when stored. No prerequisite bodies are generated or read, and no learner completion or mastery is inferred.
+
+The serialized context is capped at 12,000 characters and 40 outline lessons, with bounded text fields. If needed, the builder keeps the current lesson separately, favors nearby earlier topics, then includes later topics, and reports omitted lessons. This bounds added prompt size, not exact token cost, and aims to improve continuity without guaranteeing teaching quality. Existing cached lessons are returned unchanged. A missing current lesson in the stored outline fails before allowance or AI work; cache hits and active competing claims skip context loading.
+
 ---
 
 ## Data Models
@@ -143,6 +150,10 @@ Burst limits in `server/config/burstLimits.js` allow 20 generation POSTs per ide
 
 Lesson claims use atomic database updates, expiring leases, and attempt IDs. Only the current, unexpired attempt can publish content. Quota checks run after ownership/cache/claim checks and before provider calls; quota rejection releases the lesson claim.
 
+Lesson timing is defined in `server/config/lessonGenerationLimits.js`: a 30-second lease renews every 10 seconds while its owner is working. A stopped process therefore becomes recoverable about 30 seconds after its last successful renewal, without imposing a 30-second limit on a healthy generation. Stage checks run before AI retries, video lookup, and publication. A separate two-minute overall deadline bounds live but stuck requests. Ownership loss or renewal failure stops new stages; attempt IDs still fence publication/cleanup. This cannot cancel or undo a provider call already in flight. Audio has its own longer lease policy.
+
+The lesson read response includes generation state computed with the server clock. A leftover `generating` flag becomes `retryable` when its lease expires. While a claim is active, the client checks the owner-scoped `GET /api/lessons/:id/generation` endpoint every three seconds and opens saved content when ready. It also checks after conflicts or an uncertain POST response. These reads never claim work, consume allowance, or call AI. Checks stop on navigation, an error, or a bounded waiting period; a new paid attempt always needs an explicit click. Expired or missing-lease claims can be reclaimed safely without manually clearing a live lock.
+
 Audio uses its own claim in `LessonAudio`, with a unique lesson index, expiring lease, and attempt ID. The lease is renewed before translation and each speech chunk; an expired owner cannot renew, publish, or clear a replacement claim. Only an explicit **Generate audio** click starts narration. Source/translated text, chunk count, and stored bytes are bounded by `server/config/audioLimits.js`. Partial failures are not automatically retried or refunded. A manual retry starts the narration again, including any earlier successful chunks. Leases protect storage ownership; they cannot undo provider work already started before a crash or expiry.
 
 Each course/lesson provider call has a `GenerationCall` record, including retries and responses rejected by validation. The initial record is saved before calling AI; failure to establish accounting stops new paid work. Usage is saved before truncation or content checks. Unknown outcomes or usage remain unknown rather than zero. A post-response accounting write failure preserves the paid result and emits metadata instead of triggering a duplicate provider call.
@@ -150,6 +161,26 @@ Each course/lesson provider call has a `GenerationCall` record, including retrie
 `GET /api/usage` returns the current owner's UTC-day allowances, course/lesson text totals under `generation`, and translation/speech totals under `audio`. Every translation and speech chunk has its own provider record. Translation tokens use the same versioned text rates in `server/config/modelPricing.js`. The binary MP3 response exposes no billed token usage, so speech records preserve input characters, output bytes, and the provider request ID while leaving token/cost fields unknown. A partial cost report includes `knownEstimatedCostUsd` but leaves `estimatedCostUsd` null. Unknown models or unsupported billing modes also remain unpriced. Estimates exclude hosting, taxes, and account-specific discounts.
 
 Browser requests use same-origin `/api` forwarding through Vite locally and Vercel in production. A shared Promise coordinates guest setup within a page; Web Locks serialize setup across supported same-origin tabs. Browsers without Web Locks retain only page-local coordination. These browser mechanisms are not server-side abuse prevention.
+
+The daily allowance panel appears beside the landing-page form and above app pages. It reads course, lesson, and narration counts from `/api/usage`, shows the reset in local time, and refreshes after successful or failed generation requests, window focus/tab visibility, manual refresh, and the server-provided daily reset. Account changes create a fresh display store so late responses cannot show the previous account's allowance. A failed refresh preserves labelled last-known counts; an initial failure shows unknown counts. The display never disables reading or cached playback: server-side checks remain authoritative.
+
+On lesson pages the allowance panel collapses to a compact summary, keeping remaining counts visible. The reader provides learning goals, approximate prose reading time, an outline, optional narration controls, and PDF export. Outline anchors use block positions after removing an echoed title, so repeated headings remain distinct. Quiz submissions translate these positions back to the original content indices. Each lesson remounts its interactive reader to prevent sibling lessons from sharing quiz selections. The lesson route loads separately to keep its interactive code out of the initial landing-page bundle.
+
+### Saved progress and quiz history
+
+Written content and learner activity are separate. `LessonProgress` has a unique `(creator, lesson)` index and stores manual completion and the server-recorded last-opened time. Repeating a completion save preserves its original completion timestamp. Course and library counts are derived from existing written lessons and their progress records; retrying a save cannot increment a counter twice. Resume opens the most recently visited lesson, including an unwritten one; it does not restore a scroll position.
+
+`QuizAttempt` stores an append-only answer snapshot. The server grades against the saved lesson, ignoring client scores or answer keys. A hash of the question, options, answer, and explanation identifies its version; stale questions are rejected, while earlier attempts keep their original text and result. A unique `(creator, submissionId)` index makes simultaneous or retried submissions return one stored attempt. Reusing an ID for different input returns a conflict. Retakes use new IDs, and history uses bounded cursor pages of 20 attempts.
+
+All learning routes check course ownership using the verified user or existing signed guest cookie. Guest activity is not transferred into an account on sign-in, and deleting a guest cookie loses that browser's access to its guest records. These are self-study quizzes: lesson content still includes answers, so this is not a secure examination system. Saving progress or answers makes no AI calls and consumes no generation allowance. Learning writes have a separate identity burst bucket of 120 requests per minute on the current single-process server. Course deletion also removes its progress and quiz attempts.
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/lessons/:id/learning` | Progress, current-question summaries, and quiz history; optional `before` cursor |
+| POST | `/api/lessons/:id/visit` | Record a last-opened lesson |
+| PUT | `/api/lessons/:id/progress` | Save `{ completed: boolean }` |
+| POST | `/api/lessons/:id/quiz-attempts` | Save `{ submissionId, questionIndex, questionVersion, selectedOption }` |
+| GET | `/api/courses/:id/progress` | Completion totals, lesson badges, and resume destination |
 
 ---
 
@@ -196,6 +227,7 @@ Base URL: `http://localhost:5000` in development.
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/lessons/:id` | Optional | One lesson, written or not |
+| `GET` | `/api/lessons/:id/generation` | Optional | Read current generation state and saved content when ready; never generates |
 | `POST` | `/api/lessons/:id/generate` | Optional | Write this lesson's body |
 | `GET` | `/api/lessons/:id/audio` | Optional | Cached Hinglish mp3, or `404` |
 | `POST` | `/api/lessons/:id/audio` | Optional | Translate + synthesize, then store |
@@ -265,6 +297,18 @@ For database verification, set `TEST_MONGO_URI` locally. Scripts explicitly use 
 Run `npm run verify:bursts` from `server/` to check burst limits using a temporary local HTTP server. This check needs neither MongoDB nor AI credentials.
 
 Run `npm run verify:audio` from `server/` for audio concurrency, cache, ownership, quota, expiry, chunk limits, partial failures, and accounting checks. It uses the isolated Atlas test database, a temporary local HTTP server, and fake AI responses; there are no paid provider calls.
+
+Run `npm run verify:usage` from `client/` for allowance-refresh signals, stale-response handling, account-store isolation, and refresh-error recovery. These checks mock fetch and require neither the backend nor MongoDB or AI credentials.
+
+Run `npm run verify:reader` from `client/` to verify outline/anchor consistency, repeated and Unicode headings, echoed-title removal, malformed content, and the prose reading-time estimate. Browser checks use fake lessons to cover navigation, quiz submission and keyboard controls, per-lesson state reset, code copying, narrow-screen overflow, and the unwritten-to-written lesson flow.
+
+Run `npm run verify:generation-watch` from `client/` for read-only generation polling, completion/expiry handling, cancellation, bounded waits, and status failures. It uses fake responses and incurs no provider cost. Server generation/controller checks also verify status ownership, no quota/AI work on status reads, and safe recovery of incomplete claims.
+
+Run `npm run verify:lesson-lease` from `server/` for heartbeat timing, loss of ownership, renewal failures, the overall deadline, timer cleanup, and preventing a paid retry after losing ownership. It uses a fake clock and fake provider responses, with no real time sleeps, database access, or paid calls.
+
+Run `npm run verify:course-context` from `server/` for ordered context, first/middle/last positions, missing objectives, foreign references, escaped/Unicode size bounds, and fake-provider retries. It needs no database or paid AI calls. `verify:controllers` additionally checks stored context through isolated database fixtures, unwritten earlier coverage, ignored client context, foreign references, and invalid-outline cleanup.
+
+Run `npm run verify:learning` from `server/` for progress/quiz ownership, guest isolation, concurrent completion, server grading, idempotent submissions, retakes, version changes, cursor pages, library summaries, and deletion cleanup. It uses the isolated Atlas test database and no provider calls. Run the same command from `client/` for saved-state acknowledgement, stale responses, account/lesson isolation, history refresh failures, original question indexing, and ensuring learning writes do not emit generation events. The client checks need no backend or database.
 
 ### 4. Run
 

@@ -5,6 +5,7 @@ export function createBurstLimiters({
   windowMs = BURST_LIMITS.windowMs,
   sessionsPerIp = BURST_LIMITS.sessionsPerIp,
   generationRequestsPerIdentity = BURST_LIMITS.generationRequestsPerIdentity,
+  learningWritesPerIdentity = BURST_LIMITS.learningWritesPerIdentity,
 } = {}) {
   const options = (identifier, label) => ({
     windowMs,
@@ -49,9 +50,18 @@ export function createBurstLimiters({
     },
   });
 
-  return { sessionLimiter, generationLimiter };
+  const learningWriteLimiter = rateLimit({
+    ...options('learning', 'learning updates'),
+    limit: learningWritesPerIdentity,
+    keyGenerator(req) {
+      if (typeof req.creator !== 'string' || !req.creator) throw new Error('Identity middleware must run before learning updates.');
+      return req.creator;
+    },
+  });
+
+  return { sessionLimiter, generationLimiter, learningWriteLimiter };
 }
 
 // Import these same instances wherever the routes use them. Separate instances
 // would create independent counters and let requests evade a combined limit.
-export const { sessionLimiter, generationLimiter } = createBurstLimiters();
+export const { sessionLimiter, generationLimiter, learningWriteLimiter } = createBurstLimiters();

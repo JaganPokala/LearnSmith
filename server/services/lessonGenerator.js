@@ -163,6 +163,7 @@ export function validateLesson(lesson) {
  * @param {string} args.courseTitle
  * @param {string} args.moduleTitle
  * @param {string} args.lessonTitle
+ * @param {object} [args.courseContext] compact stored curriculum metadata
  * @returns {Promise<{ lesson: object, attempts: number, ms: number }>}
  * @throws {ApiError}
  */
@@ -170,18 +171,22 @@ export function createLessonGenerator({
   generate = generateJSON,
   tracker = generationTracker,
 } = {}) {
-  return async function generateLesson({ courseTitle, moduleTitle, lessonTitle }, context = {}) {
+  return async function generateLesson({ courseTitle, moduleTitle, lessonTitle, courseContext }, context = {}) {
     const startedAt = performance.now();
+    const { beforeProviderCall, ...trackingContext } = context;
 
     let feedback;
 
     const MAX_ATTEMPTS = 2;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const tracking = { ...context, operation: 'lesson', attemptNumber: attempt };
+      // Outside the retry catch: losing ownership must never trigger another
+      // paid attempt, even if a preceding provider response was invalid.
+      await beforeProviderCall?.();
+      const tracking = { ...trackingContext, operation: 'lesson', attemptNumber: attempt };
       try {
         const { text } = await generate({
-          messages: lessonMessages({ courseTitle, moduleTitle, lessonTitle }, feedback),
+          messages: lessonMessages({ courseTitle, moduleTitle, lessonTitle, courseContext }, feedback),
           schema: lessonSchema,
           schemaName: LESSON_SCHEMA_NAME,
           tracking,

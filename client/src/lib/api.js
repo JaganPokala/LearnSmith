@@ -6,6 +6,8 @@
  */
 
 
+import { generationSettled } from './generationEvents.js';
+
 /** An API failure, carrying the backend's machine-readable code. */
 export class ApiError extends Error {
   constructor(message, { code, status }) {
@@ -157,22 +159,38 @@ async function request(
   return parse === 'blob' ? res.blob() : res.json();
 }
 
+async function generationRequest(path, options) {
+  try {
+    return await request(path, options);
+  } finally {
+    // Includes quota/provider failures and timeouts. Only the server knows
+    // whether an allowance was consumed. Usage reads/session setup do not emit.
+    generationSettled();
+  }
+}
+
 export const api = {
   get: (path) => request(path),
 
   // Content-Type only where there is a body; on GET/DELETE it just triggers
   // an unnecessary CORS preflight.
   //
-  // Every POST in this app is a generation, so they all get the long deadline.
+  // Generation POSTs get a longer deadline and refresh the allowance display.
   // One global number cannot serve both: 20s would kill a legitimate lesson,
   // and 75s would leave a hung read spinning for over a minute.
   post: (path, body) =>
-    request(path, {
+    generationRequest(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body ?? {}),
       timeoutMs: GENERATE_TIMEOUT_MS,
     }),
+
+  // Saving learning activity is ordinary database work, with no AI allowance.
+  postAction: (path, body) => request(path, { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) }),
+  put: (path, body) => request(path, { method: 'PUT',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) }),
 
   delete: (path) => request(path, { method: 'DELETE' }),
 
@@ -181,5 +199,5 @@ export const api = {
 
   /** Generate binary, allowing bounded multi-chunk narration to finish. */
   postBlob: (path) =>
-    request(path, { method: 'POST', parse: 'blob', timeoutMs: AUDIO_TIMEOUT_MS }),
+    generationRequest(path, { method: 'POST', parse: 'blob', timeoutMs: AUDIO_TIMEOUT_MS }),
 };

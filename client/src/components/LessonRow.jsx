@@ -13,7 +13,7 @@ import StatusChip from './StatusChip.jsx';
  * @param {number} props.number    the course-wide position (see the note in Course.jsx)
  * @param {object} props.lesson    { _id, title, isEnriched }
  */
-export default function LessonRow({ number, lesson }) {
+export default function LessonRow({ number, lesson, completed = false }) {
   // 1. The whole row is a <Link to={`/lessons/${lesson._id}`}>.
   //
   // 2. Index: zero-padded to two digits, fixed ~26px width, font-mono, muted.
@@ -37,7 +37,7 @@ export default function LessonRow({ number, lesson }) {
       <span className="min-w-0 flex-1 truncate text-base">{lesson.title}</span>
 
       <span className="shrink-0">
-        <StatusChip isEnriched={lesson.isEnriched} />
+        {completed ? <span className="text-xs text-ok">✓ Completed</span> : <StatusChip isEnriched={lesson.isEnriched} />}
       </span>
     </Link>
   );

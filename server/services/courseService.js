@@ -8,6 +8,8 @@
  */
 
 import Course from '../models/Course.js';
+import LessonProgress from '../models/LessonProgress.js';
+import QuizAttempt from '../models/QuizAttempt.js';
 import Module from '../models/Module.js';
 import Lesson from '../models/Lesson.js';
 import { traceError } from '../middlewares/trace.js';
@@ -95,6 +97,9 @@ export async function deleteCourseTree(courseId) {
   const course = await Course.findById(courseId);
 
   if (!course) return null;
+
+  await LessonProgress.deleteMany({ course: courseId });
+  await QuizAttempt.deleteMany({ course: courseId });
 
   // Deleted by `course`, not by walking module ids: a lesson whose module row
   // went missing was invisible to the old cascade and survived forever.

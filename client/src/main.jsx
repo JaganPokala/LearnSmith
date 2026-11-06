@@ -7,10 +7,11 @@ import AppLayout from './layouts/AppLayout.jsx';
 import LandingPage from './pages/Landing.jsx';
 import LibraryPage from './pages/Library.jsx';
 import CoursePage from './pages/Course.jsx';
-import LessonPage from './pages/Lesson.jsx';
 import NotFoundPage from './pages/NotFound.jsx';
 import { api } from './lib/api.js';
 import AuthProvider from './components/AuthProvider.jsx';
+import UsageProvider from './components/UsageProvider.jsx';
+import LessonRoute from './components/LessonRoute.jsx';
 
 // Render's free tier spins the API down after ~15 minutes idle, and the next
 // request pays the cold start. Firing this at module load — before React even
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')).render(
         the URL, and the router has to read the result of that, not race it.
         A passthrough entirely when Auth0 is not configured. */}
     <AuthProvider>
+      <UsageProvider>
       {/* BrowserRouter must wrap everything that uses Link, useParams, etc. */}
       <BrowserRouter>
         <Routes>
@@ -59,7 +61,7 @@ createRoot(document.getElementById('root')).render(
 
             <Route path="/courses" element={<LibraryPage />} />
             <Route path="/courses/:courseId" element={<CoursePage />} />
-            <Route path="/lessons/:lessonId" element={<LessonPage />} />
+            <Route path="/lessons/:lessonId" element={<LessonRoute />} />
           </Route>
 
           {/* 4. A catch-all LAST: path="*" element={<NotFoundPage />}
@@ -68,6 +70,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="*" element={<NotFoundPage />} />
           </Routes>
       </BrowserRouter>
+      </UsageProvider>
     </AuthProvider>
   </StrictMode>,
 );

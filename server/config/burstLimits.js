@@ -4,4 +4,5 @@ export const BURST_LIMITS = Object.freeze({
   windowMs: 60_000,
   sessionsPerIp: 60,
   generationRequestsPerIdentity: 20,
+  learningWritesPerIdentity: 120,
 });

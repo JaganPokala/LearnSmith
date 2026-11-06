@@ -20,6 +20,11 @@
  */
 function table(noun) {
   return {
+    generation_status_unavailable: {
+      title: 'Could not check generation status',
+      detail: 'Check the lesson status again before retrying generation.',
+      retry: true,
+    },
     daily_quota_exceeded: {
       title: 'Daily generation limit reached',
       retry: false,

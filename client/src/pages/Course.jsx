@@ -9,6 +9,7 @@ import { describeError } from '../lib/errors.js';
 import RetryButton from '../components/RetryButton.jsx';
 import { useAuth } from '../lib/auth.js';
 import DeleteButton from '../components/DeleteButton.jsx';
+import { useCourseProgress } from '../hooks/useCourseProgress.js';
 import {
   SidebarSection,
   SidebarItem,
@@ -34,9 +35,10 @@ export default function CoursePage() {
 
   // Held until auth settles, or a reload of a signed-in user's own course
   // goes out tokenless and comes back 404.
-  const { isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading, user } = useAuth();
 
   const { data: course, loading, error } = useCourse(courseId, !authLoading);
+  const progress = useCourseProgress(courseId, !authLoading, user?.sub ?? 'guest');
 
   // Every hook is declared before the early returns below: hooks must run in
   // the same order on every render, and one sitting after `if (loading) return`
@@ -159,6 +161,13 @@ export default function CoursePage() {
         }
       />
 
+      <section aria-label="Course progress" className="my-4 border border-line bg-panel p-4 text-sm">
+        {progress.data ? <>
+          <p className="text-ink">{progress.data.completedLessons} of {progress.data.totalLessons} lessons completed · {progress.data.percent}%</p>
+          {progress.data.resumeLesson && <Link to={`/lessons/${progress.data.resumeLesson.id}`} className="mt-2 inline-block text-glow hover:underline">Resume: {progress.data.resumeLesson.title} →</Link>}
+        </> : progress.error ? <p role="alert" className="text-danger">Progress unavailable. <button type="button" onClick={progress.refresh} className="underline">Try again</button></p> : <p className="text-mute">Loading saved progress…</p>}
+      </section>
+
       {outline.sections.length === 0 ? (
         <StateMessage
           kind="empty"
@@ -169,7 +178,7 @@ export default function CoursePage() {
         // Keyed on module._id, not the array index: keying by index makes React
         // reuse the wrong DOM when a list reorders.
         outline.sections.map(({ module, startNumber }, i) => (
-          <ModuleSection key={module._id} number={i + 1} module={module} startNumber={startNumber} />
+          <ModuleSection key={module._id} number={i + 1} module={module} startNumber={startNumber} completedLessonIds={progress.data?.completedLessonIds} />
         ))
       )}
     </>

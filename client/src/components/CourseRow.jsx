@@ -77,6 +77,7 @@ export default function CourseRow({ index, course, onDeleted }) {
               {course.tags.join(' · ')}
             </span>
           )}
+          <span className="mt-1 block text-xs text-dim">{course.completedLessonCount ?? 0} / {course.lessonCount} completed</span>
         </span>
 
         <span className="hidden w-[96px] shrink-0 text-right font-mono text-meta tabular-nums text-dim sm:block">
@@ -87,6 +88,7 @@ export default function CourseRow({ index, course, onDeleted }) {
           {timeAgo(course.createdAt)}
         </span>
       </Link>
+      {course.resumeLessonId && <Link to={`/lessons/${course.resumeLessonId}`} className="mr-10 shrink-0 text-xs text-glow hover:underline">Resume →</Link>}
 
       {/* Absolutely positioned so adding it did not cost the four columns a
           fifth width to keep in sync with the header row. */}

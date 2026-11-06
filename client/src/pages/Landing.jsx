@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import PromptForm from '../components/PromptForm.jsx';
 import { useAuth, AUTH_ENABLED } from '../lib/auth.js';
 import { useFeatures } from '../hooks/useFeatures.js';
+import UsagePanel from '../components/UsagePanel.jsx';
 
 /**
  * The public landing page — the "Console" direction, dark throughout.
@@ -241,6 +242,7 @@ export default function LandingPage() {
               now the first thing on the page regardless. */}
           <div className="mx-auto max-w-[520px] text-left">
             <PromptForm variant="hero" />
+            <div className="mt-4"><UsagePanel /></div>
           </div>
 
           <div className="mt-[18px] flex flex-wrap items-center justify-center gap-2">

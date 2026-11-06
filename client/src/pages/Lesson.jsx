@@ -4,14 +4,14 @@ import { useLesson } from '../hooks/useLesson.js';
 import { useGenerateLesson } from '../hooks/useGenerateLesson.js';
 import { SidebarSection, SidebarItem, SidebarDot } from '../components/Sidebar.jsx';
 import StateMessage from '../components/StateMessage.jsx';
-import LessonRenderer from '../components/blocks/LessonRenderer.jsx';
+import LessonReader from '../components/LessonReader.jsx';
 import LessonSkeleton from '../components/LessonSkeleton.jsx';
-import AudioPlayer from '../components/AudioPlayer.jsx';
 import { describeError } from '../lib/errors.js';
-import { stripEchoedTitle } from '../lib/lessonBody.js';
 import RetryButton from '../components/RetryButton.jsx';
 import { useAuth } from '../lib/auth.js';
 import { useFeatures } from '../hooks/useFeatures.js';
+import { useLessonLearning } from '../hooks/useLessonLearning.js';
+import { LearningContext } from '../lib/learningContext.js';
 
 /**
  * One measure for the whole article. The objectives box, the skeleton and the
@@ -40,11 +40,13 @@ export default function LessonPage() {
 
   // Held until auth settles, for the same reason as the course page: a
   // tokenless reload of your own lesson is a 404.
-  const { isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading, user } = useAuth();
   const features = useFeatures();
 
-  const { data, loading, error, applyGeneratedLesson } = useLesson(lessonId, !authLoading);
-  const { run, pendingId, failure, reset } = useGenerateLesson();
+  const { data, loading, error, statusError, checkStatus, applyGeneratedLesson } = useLesson(lessonId, !authLoading);
+  const { run, pendingId, failure, reset } = useGenerateLesson({ checkStatus });
+  const learning = useLessonLearning(lessonId, !authLoading && String(data?.lesson?._id) === lessonId,
+    Boolean(data?.lesson?.isEnriched), user?.sub ?? 'guest');
 
   const { setRail } = useOutletContext();
 
@@ -52,7 +54,8 @@ export default function LessonPage() {
   // of these must be asked about THIS lesson rather than read as bare flags.
   // Otherwise the sibling you navigate to shows a spinner, or a red message,
   // for a write that was never its own.
-  const writing = pendingId === lessonId;
+  const watching = data?.generation?.state === 'generating' && !data?.lesson?.isEnriched;
+  const writing = pendingId === lessonId || watching;
   const writeError = failure?.lessonId === lessonId ? failure.error : null;
 
   // setRail is called from an effect, never from the render body: setting parent
@@ -111,7 +114,7 @@ export default function LessonPage() {
         kind="error"
         title={title}
         detail={detail}
-        action={retry ? <RetryButton onClick={() => window.location.reload()} /> : undefined}
+        action={retry || ['network_error', 'database_unavailable'].includes(error.code) ? <RetryButton onClick={checkStatus} /> : undefined}
       />
     );
   }
@@ -124,18 +127,16 @@ export default function LessonPage() {
 
   const { lesson, course, module, position, total } = data;
 
-  const body = stripEchoedTitle(lesson.content, lesson.title);
-
   const siblings = data.siblings ?? [];
   const here = siblings.findIndex((s) => String(s._id) === String(lesson._id));
   const prev = here > 0 ? siblings[here - 1] : null;
   const next = here >= 0 && here < siblings.length - 1 ? siblings[here + 1] : null;
 
-  const stepLink = 'flex min-w-0 flex-1 flex-col gap-[3px] border border-line bg-panel px-[13px] py-[10px] hover:border-accent';
+  const stepLink = 'flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-line bg-panel px-5 py-4 hover:border-accent focus-visible:outline-2 focus-visible:outline-glow';
   const stepLabel = 'font-mono text-xs uppercase tracking-[0.12em] text-mute';
 
   const steps = (prev || next) && (
-    <nav className="mt-7 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row print:hidden">
+    <nav aria-label="Continue learning" className="mt-12 flex flex-col gap-3 border-t border-line pt-6 sm:flex-row print:hidden">
       {prev ? (
         <Link to={`/lessons/${prev._id}`} className={stepLink}>
           <span className={stepLabel}>← previous</span>
@@ -152,7 +153,7 @@ export default function LessonPage() {
         </Link>
       ) : (
         <Link to={`/courses/${course?._id}`} className={`${stepLink} sm:text-right`}>
-          <span className={stepLabel}>module complete</span>
+          <span className={stepLabel}>course outline</span>
           <span className="truncate text-base text-ink">Back to {course?.title}</span>
         </Link>
       )}
@@ -211,19 +212,24 @@ export default function LessonPage() {
             aria-live="polite"
             className="mb-[18px] border border-line border-l-2 border-l-accent bg-panel px-[13px] py-[11px]"
           >
-            <p className="m-0 text-base font-semibold text-ink">Writing this lesson…</p>
+            <p className="m-0 text-base font-semibold text-ink">{statusError ? 'Could not check the generation status' : watching ? 'Waiting for this lesson to finish…' : 'Writing this lesson…'}</p>
 
             <p className="m-0 mt-[3px] text-sm leading-[1.55] text-dim">
-              Usually eight to thirteen seconds. The text, code and questions are being written
-              now, and saved so the next visit is instant.
+              {statusError
+                ? 'Automatic checking paused. Check the status again before starting another generation.'
+                : watching
+                  ? 'Another request has already started this lesson. We’re checking for the saved result automatically. You can browse other lessons while you wait.'
+                  : 'The text, code and questions are being written and saved for future visits.'}
             </p>
+
+            {watching && <button type="button" onClick={checkStatus} className="mt-3 border border-line-strong px-3 py-1.5 text-xs text-glow hover:border-glow">Check status now</button>}
 
             <div className="mt-[11px] h-[2px] w-full overflow-hidden bg-line">
               <div className="h-full w-1/4 animate-slide bg-accent" />
             </div>
           </div>
 
-          <LessonSkeleton />
+          {!statusError && <LessonSkeleton />}
         </div>
       </>
     );
@@ -235,13 +241,13 @@ export default function LessonPage() {
         {header}
         <StateMessage
           kind="empty"
-          title="This lesson has not been written yet"
-          detail="Lessons are written when you open them, so you only wait for the ones you actually read."
+          title={['retryable', 'failed'].includes(data.generation?.state) ? 'The previous generation did not finish' : 'This lesson has not been written yet'}
+          detail={['retryable', 'failed'].includes(data.generation?.state) ? 'You can start a new attempt now. A new attempt may use your daily lesson allowance.' : 'Generate this lesson when you’re ready. The result will be saved for future visits.'}
           action={
             <>
               {writeError && (
                 <p role="alert" className="mb-3 text-sm text-danger">
-                  {writeError.message}
+                  {writeError.code === 'generation_in_progress' ? 'The earlier generation is no longer active. You can check the status or start a new attempt.' : writeError.message}
                 </p>
               )}
 
@@ -254,8 +260,9 @@ export default function LessonPage() {
                 disabled={pendingId !== null}
                 className="border border-accent-line bg-accent-bg px-[13px] py-[6px] text-sm font-semibold text-glow hover:border-glow hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pendingId ? 'Another lesson is being written…' : 'Write this lesson →'}
+                {pendingId ? 'Another lesson is being written…' : data.generation?.state === 'retryable' ? 'Retry lesson generation →' : 'Write this lesson →'}
               </button>
+              <button type="button" onClick={checkStatus} className="ml-3 px-3 py-1.5 text-sm text-dim hover:text-glow">Check status</button>
             </>
           }
         />
@@ -263,40 +270,8 @@ export default function LessonPage() {
     );
   }
 
-  return (
-    <>
-      {header}
-
-      <div className={MEASURE}>
-      {/* Above the objectives: someone who wants to listen rather than read
-          should not have to scroll the whole lesson to find that out. */}
-      {/* Keyed so a move between sibling lessons REMOUNTS it. Without the
-          key the component is reused, and it would show the previous lesson's
-          recording under the new lesson's title — F3 all over again, in audio. */}
-      {features.tts && <AudioPlayer key={lessonId} lessonId={lessonId} />}
-
-      {/* Nothing at all when the array is empty — an empty labelled box looks
-          like a rendering bug. */}
-      {lesson.objectives?.length > 0 && (
-        <div className="mb-[18px] border border-line border-l-2 border-l-accent bg-panel px-[13px] py-[11px]">
-          <div className="mb-[6px] font-mono text-xs uppercase tracking-[0.13em] text-glow">
-            You will be able to
-          </div>
-
-          <ul className="m-0 list-disc pl-4">
-            {lesson.objectives.map((objective) => (
-              <li key={objective} className="mb-[3px] text-base leading-[1.5] text-body">
-                {objective}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-        <LessonRenderer blocks={body} />
-
-        {steps}
-      </div>
-    </>
-  );
+  // Key the entire interactive reader. A sibling at the same block index must
+  // not inherit quiz answers or copy feedback from the previous lesson.
+  return <LearningContext.Provider value={learning}><LessonReader key={`${lessonId}:${user?.sub ?? 'guest'}`} lesson={lesson} course={course} module={module}
+    position={position} total={total} ttsEnabled={features.tts} footer={steps} /></LearningContext.Provider>;
 }

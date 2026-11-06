@@ -17,6 +17,8 @@ import { features } from '../config/env.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
 import { consumeDailyQuota } from '../services/usageService.js';
+import { startLessonGenerationLease } from '../services/lessonGenerationLease.js';
+import { loadLessonCourseContext } from '../services/lessonCourseContext.js';
 import {
   findReadyAudio, claimAudioGeneration, renewAudioGeneration,
   completeAudioGeneration, failAudioGeneration,
@@ -26,6 +28,7 @@ import {
   claimLessonGeneration,
   completeLessonGeneration,
   failLessonGeneration,
+  describeLessonGeneration,
 } from '../services/lessonGenerationState.js';
 
 
@@ -57,7 +60,7 @@ export function createGenerateLessonContent({
     // is context for the generator, so both run in parallel.
     const [course, module] = await Promise.all([
       Course.findOne({ _id: lesson.course, creator: creatorOf(req) }),
-      Module.findById(lesson.module),
+      Module.findOne({ _id: lesson.module, course: lesson.course }),
     ]);
 
     // Same 404 for "no such lesson", "orphaned" and "not yours" — which one it
@@ -97,6 +100,7 @@ export function createGenerateLessonContent({
         return res.json(latest);
       }
 
+      res.set('Retry-After', '3');
       throw new ApiError(
         409,
         'generation_in_progress',
@@ -105,42 +109,57 @@ export function createGenerateLessonContent({
     }
 
     const { attemptId } = claim;
+    const lease = startLessonGenerationLease({ lessonId: lesson._id, courseId: course._id, attemptId });
 
     try {
-      // Cache hits and unsuccessful claims return before consuming quota.
-      // Keep this inside try so quota rejection releases this attempt's claim.
-      await consumeQuota({
-        creator: creatorOf(req),
-        identityType: req.identityType,
-        resource: 'lessons',
+      const { saved, ms } = await lease.run(async () => {
+        const courseContext = await loadLessonCourseContext({
+          courseId: course._id, lessonId: claim.lesson._id, creator: creatorOf(req),
+        });
+        await lease.check();
+        // Cache hits and unsuccessful claims return before consuming quota.
+        // Keep this inside try so quota rejection releases this attempt's claim.
+        await consumeQuota({
+          creator: creatorOf(req),
+          identityType: req.identityType,
+          resource: 'lessons',
+        });
+        await lease.check();
+
+        const { lesson: generated, ms } = await generate({
+          courseTitle: course.title,
+          moduleTitle: module.title,
+          lessonTitle: claim.lesson.title,
+          courseContext,
+        }, {
+          creator: creatorOf(req),
+          generationId: attemptId,
+          beforeProviderCall: lease.check,
+        });
+
+        await lease.check();
+        const content = await resolveVideos(generated.content, { beforeLookup: lease.check });
+        await lease.check();
+
+        const saved = await completeLessonGeneration({
+          lessonId: lesson._id,
+          courseId: course._id,
+          attemptId,
+          content,
+          objectives: generated.objectives,
+        });
+
+        if (!saved) {
+          throw new ApiError(
+            409,
+            'generation_claim_lost',
+            'This generation attempt expired or was replaced. Reload the lesson.',
+          );
+        }
+
+        return { saved, ms };
       });
-
-      const { lesson: generated, ms } = await generate({
-        courseTitle: course.title,
-        moduleTitle: module.title,
-        lessonTitle: claim.lesson.title,
-      }, {
-        creator: creatorOf(req),
-        generationId: attemptId,
-      });
-
-      const content = await resolveVideos(generated.content);
-
-      const saved = await completeLessonGeneration({
-        lessonId: lesson._id,
-        courseId: course._id,
-        attemptId,
-        content,
-        objectives: generated.objectives,
-      });
-
-      if (!saved) {
-        throw new ApiError(
-          409,
-          'generation_claim_lost',
-          'This generation attempt expired or was replaced. Reload the lesson.',
-        );
-      }
+      lease.stop();
 
       trace(
         `lesson=${lesson._id} attempt=${attemptId} generated in ${ms}ms`,
@@ -164,6 +183,8 @@ export function createGenerateLessonContent({
       }
 
       throw err;
+    } finally {
+      lease.stop();
     }
   };
 }
@@ -213,6 +234,7 @@ export async function getLesson(req, res) {
 
   res.json({
     lesson,
+    generation: describeLessonGeneration(lesson),
     course: { _id: course._id, title: course.title },
     module: { _id: module._id, title: module.title },
     siblings,
@@ -249,6 +271,16 @@ async function ownedLesson(req) {
   }
 
   return lesson;
+}
+
+// Cheap, read-only polling: no module population, quota consumption, or AI.
+export async function getLessonGenerationStatus(req, res) {
+  const lesson = await ownedLesson(req);
+  res.set('Cache-Control', 'private, no-store');
+  res.json({
+    generation: describeLessonGeneration(lesson),
+    lesson: lesson.isEnriched ? lesson : { _id: lesson._id, isEnriched: false },
+  });
 }
 
 /**

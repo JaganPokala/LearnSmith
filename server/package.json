@@ -15,7 +15,10 @@
     "verify:controllers": "node scripts/verifyGenerationController.js",
     "verify:accounting": "node scripts/verifyCostTracking.js",
     "verify:bursts": "node scripts/verifyBurstLimits.js",
-    "verify:audio": "node scripts/verifyAudio.js"
+    "verify:audio": "node scripts/verifyAudio.js",
+    "verify:lesson-lease": "node scripts/verifyLessonLease.js",
+    "verify:learning": "node scripts/verifyLearning.js",
+    "verify:course-context": "node scripts/verifyLessonCourseContext.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

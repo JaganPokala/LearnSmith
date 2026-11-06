@@ -9,7 +9,7 @@ import { api } from '../lib/api.js';
  * `pending` made the NEXT lesson render "Writing this lesson…" for a write that
  * was never its own — the second half of F3.
  */
-export function useGenerateLesson() {
+export function useGenerateLesson({ checkStatus } = {}) {
   // The lesson currently being written, or null. Not a boolean: the page has to
   // be able to ask "is it MINE that is generating?".
   const [pendingId, setPendingId] = useState(null);
@@ -38,12 +38,17 @@ export function useGenerateLesson() {
       return await api.post(`/api/lessons/${lessonId}/generate`);
     } catch (err) {
       setFailure({ lessonId, error: err });
+      // The server may still be working after a conflict or a lost response.
+      // Resume read-only observation; never submit another generation here.
+      if (['generation_in_progress', 'generation_claim_lost', 'generation_claim_unavailable', 'generation_timeout', 'timeout', 'network_error'].includes(err.code)) {
+        checkStatus?.();
+      }
       return null;
     } finally {
       inFlight.current = false;
       setPendingId(null);
     }
-  }, []);
+  }, [checkStatus]);
 
   const reset = useCallback(() => setFailure(null), []);
 

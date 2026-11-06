@@ -5,8 +5,8 @@ import { createBurstLimiters } from '../middlewares/burstLimits.js';
 
 async function verify() {
   // Small limits make the tests fast. No MongoDB or provider is involved.
-  const { sessionLimiter, generationLimiter } = createBurstLimiters({
-    windowMs: 60_000, sessionsPerIp: 2, generationRequestsPerIdentity: 2,
+  const { sessionLimiter, generationLimiter, learningWriteLimiter } = createBurstLimiters({
+    windowMs: 60_000, sessionsPerIp: 2, generationRequestsPerIdentity: 2, learningWritesPerIdentity: 2,
   });
   const app = express();
   app.use(express.json());
@@ -41,6 +41,9 @@ async function verify() {
   app.post('/api/lessons/:id/generate', generationLimiter, generate);
   app.post('/api/lessons/:id/audio', generationLimiter, generate);
   app.get('/api/lessons/:id', (req, res) => res.json({ readable: true }));
+  app.post('/api/lessons/:id/visit', learningWriteLimiter, (req, res) => res.json({ saved: true }));
+  app.put('/api/lessons/:id/progress', learningWriteLimiter, (req, res) => res.json({ saved: true }));
+  app.post('/api/lessons/:id/quiz-attempts', learningWriteLimiter, (req, res) => res.json({ saved: true }));
   app.post('/test/missing-identity', generationLimiter, generate);
   app.use((err, req, res, next) => {
     res.status(500).json({ error: { message: err.message } });
@@ -68,6 +71,13 @@ async function verify() {
     assert.equal(cookiesIssued, 2);
     assert.ok(Number(blockedSession.headers.get('retry-after')) >= 1);
     console.log('PASS: Session bursts are blocked before another cookie can be issued.');
+
+    assert.equal((await request('/api/lessons/example/visit')).status, 200);
+    assert.equal((await request('/api/lessons/example/progress', { method: 'PUT' })).status, 200);
+    assert.equal((await request('/api/lessons/example/quiz-attempts')).status, 429);
+    assert.equal(quotaCalls, 0);
+    assert.equal(generatorCalls, 0);
+    console.log('PASS: Learning writes share their own identity bucket without consuming generation admission or quota.');
 
     assert.equal((await request('/api/courses/generate')).status, 201);
     assert.equal((await request('/api/lessons/example/generate')).status, 201);

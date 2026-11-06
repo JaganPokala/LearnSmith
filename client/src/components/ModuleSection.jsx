@@ -8,7 +8,7 @@ import LessonRow from './LessonRow.jsx';
  * @param {object} props.module       { title, lessons: [...] }
  * @param {number} props.startNumber  the course-wide number of its FIRST lesson
  */
-export default function ModuleSection({ number, module, startNumber }) {
+export default function ModuleSection({ number, module, startNumber, completedLessonIds = [] }) {
   const lessons = module.lessons ?? [];
 
   const written = lessons.filter((lesson) => lesson.isEnriched).length;
@@ -41,7 +41,7 @@ export default function ModuleSection({ number, module, startNumber }) {
           whose tree half-saved, and a header with nothing under it is the honest
           render of that. */}
       {lessons.map((lesson, i) => (
-        <LessonRow key={lesson._id} number={startNumber + i} lesson={lesson} />
+        <LessonRow key={lesson._id} number={startNumber + i} lesson={lesson} completed={completedLessonIds.includes(String(lesson._id))} />
       ))}
     </section>
   );

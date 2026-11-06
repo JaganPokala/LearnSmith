@@ -7,6 +7,8 @@ import {
   claimLessonGeneration,
   completeLessonGeneration,
   failLessonGeneration,
+  describeLessonGeneration,
+  renewLessonGeneration,
 } from '../services/lessonGenerationState.js';
 
 dotenv.config({
@@ -31,7 +33,7 @@ async function createFixture() {
   };
 }
 
-// Moves the expiration into the past without waiting five minutes.
+// Moves the expiration into the past without waiting for the lease.
 async function expireLease(lessonId) {
   await Lesson.updateOne(
     { _id: lessonId },
@@ -53,6 +55,11 @@ function complete(fixture, attemptId) {
 }
 
 async function verify() {
+  const now = new Date();
+  assert.equal(describeLessonGeneration({ isEnriched: true }).state, 'ready');
+  assert.equal(describeLessonGeneration({ generationStatus: 'generating', generationLeaseExpiresAt: new Date(now.getTime() + 1000) }, now).state, 'generating');
+  assert.equal(describeLessonGeneration({ generationStatus: 'generating', generationLeaseExpiresAt: new Date(now.getTime() - 1000) }, now).state, 'retryable');
+  assert.equal(describeLessonGeneration({ generationStatus: 'generating', generationLeaseExpiresAt: null }, now).state, 'retryable');
   assert.ok(
     process.env.TEST_MONGO_URI,
     'Set TEST_MONGO_URI before running this script.',
@@ -77,6 +84,16 @@ async function verify() {
     assert.equal(winners.length, 1);
 
     const winner = winners[0];
+
+    // Advance the renewal's clock without sleeping. It extends a healthy
+    // owner's reservation beyond the original 30-second deadline.
+    const oldExpiry = winner.lesson.generationLeaseExpiresAt;
+    assert.equal(await renewLessonGeneration({ ...first, attemptId: winner.attemptId, now: new Date(oldExpiry.getTime() - 10_000) }), true);
+    const renewed = await Lesson.findById(first.lessonId);
+    assert.ok(renewed.generationLeaseExpiresAt > oldExpiry);
+    assert.equal(describeLessonGeneration(renewed, new Date(oldExpiry.getTime() + 1000)).state, 'generating');
+    assert.equal(await claimLessonGeneration(first.lessonId, first.courseId), null);
+    console.log('PASS: Healthy work renews past its original short lease without allowing a second owner.');
 
     console.log('PASS: Only one concurrent claim succeeds.');
 
@@ -135,6 +152,7 @@ async function verify() {
     assert.ok(attemptA);
 
     await expireLease(third.lessonId);
+    assert.equal(await renewLessonGeneration({ ...third, attemptId: attemptA.attemptId }), false);
 
     const expiredSave = await complete(third, attemptA.attemptId);
 
@@ -150,6 +168,7 @@ async function verify() {
 
     assert.ok(attemptB);
     assert.notEqual(attemptB.attemptId, attemptA.attemptId);
+    assert.equal(await renewLessonGeneration({ ...third, attemptId: attemptA.attemptId }), false);
 
     console.log('PASS: Expired claims can be recovered.');
 
@@ -177,6 +196,13 @@ async function verify() {
     assert.equal(validSave.isEnriched, true);
 
     console.log('PASS: Stale attempts cannot interfere with the new owner.');
+
+    const incomplete = await createFixture();
+    await Lesson.updateOne({ _id: incomplete.lessonId }, { $set: {
+      generationStatus: 'generating', generationAttemptId: 'incomplete-owner', generationLeaseExpiresAt: null,
+    } });
+    assert.ok(await claimLessonGeneration(incomplete.lessonId, incomplete.courseId));
+    console.log('PASS: Claims with missing lease expiry can recover, while active claims remain protected.');
   } finally {
     try {
       await Lesson.deleteMany({ _id: { $in: createdIds } });

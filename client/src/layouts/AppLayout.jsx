@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useMatch } from 'react-router-dom';
 import Sidebar from '../components/Sidebar.jsx';
+import UsagePanel from '../components/UsagePanel.jsx';
 
 /** Matches Tailwind's md. Named once so the JS and the classes cannot drift. */
 const DESKTOP = '(min-width: 768px)';
@@ -23,6 +24,7 @@ const MAX_WIDTH = 560;
  * down. Data still flows downward; only a function crosses the boundary.
  */
 export default function AppLayout() {
+  const isLesson = Boolean(useMatch('/lessons/:lessonId'));
   const [rail, setRail] = useState(null);
 
   // Open on a desktop, closed on a phone — where the rail is a drawer OVER the
@@ -167,6 +169,7 @@ export default function AppLayout() {
                      and changes as you drag.
             closed → centred, because there is nothing to sit beside. */}
         <div className={`print-full max-w-[1100px] ${open ? '' : 'mx-auto'}`}>
+          <div className="max-w-[720px]"><UsagePanel compact={isLesson} /></div>
           <Outlet context={outletContext} />
         </div>
       </main>

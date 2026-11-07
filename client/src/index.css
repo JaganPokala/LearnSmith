@@ -1,68 +1,36 @@
 @import "tailwindcss";
 
-/* The design system, in one block.
-   The --color- and --font- PREFIXES are what make Tailwind generate utilities:
-   --color-ink  ->  bg-ink / text-ink / border-ink
-   --font-mono  ->  font-mono
-   Rename the prefix and the utility silently stops existing. */
+/* Shared semantic tokens keep the existing learning screens on the same palette.
+   Keep the Tailwind color/font prefixes: they generate the utility classes. */
 @theme {
-  /* THE PALETTE. Every value is lifted from Landing.jsx, which is the look this
-     app is matching — so the marketing page and the product are one design
-     rather than two that happen to share a logo.
-
-     SURFACES, darkest first. Three is the whole range: the page, the things on
-     it, and the things inside those. */
-  --color-ground: #0a0c0f;        /* the page itself */
-  --color-panel: #0d1116;         /* cards, rows, stat cells, the rail */
-  --color-raised: #151b23;        /* code blocks, hovers, skeleton bars */
-
-  --color-line: #191f26;          /* hairlines */
-  --color-line-strong: #273039;   /* inputs, dashed empty states */
-
-  /* TEXT, brightest first. Four levels, and no more: six greys is what the
-     light theme had, and it is why nothing looked deliberate. */
-  --color-ink: #e8edf2;           /* headings, primary */
-  --color-body: #c3ccd6;          /* reading prose */
-  --color-dim: #93a0ad;           /* secondary, descriptions */
-  --color-mute: #7a8594;          /* meta, micro labels, row numbers.
-                                     Measured, not picked: at #69737f this was
-                                     3.93:1 on panel, and it carries 12-13px
-                                     text that needs 4.5:1. */
-
-  /* ACCENT */
-  --color-accent: #0e7490;        /* borders, active states */
-  --color-glow: #22d3ee;          /* selected items, accent text */
-  --color-accent-bg: #0b2730;
-  --color-accent-line: #1b4a58;
-
-  /* STATUS. Each is a text colour with a tinted panel and a border to match,
-     because every one of them is used as all three. */
-  --color-ok: #7dd3c0;
-  --color-ok-bg: #0f201d;
-  --color-ok-line: #2c5f56;
-
-  --color-danger: #f0938b;
-  --color-danger-bg: #1d1315;
-  --color-danger-line: #5f2b29;
-
-  --color-warn: #e0b064;
-  --color-warn-bg: #1c1710;
-  --color-warn-line: #57411f;
-
+  --color-ground: #f7f6f2;
+  --color-panel: #ffffff;
+  --color-raised: #efeee8;
+  --color-line: #dfdfd6;
+  --color-line-strong: #b9bdb1;
+  --color-ink: #252c28;
+  --color-body: #414b44;
+  --color-dim: #59645c;
+  --color-mute: #657066;
+  --color-accent: #3e624c;
+  --color-glow: #365c45;
+  --color-accent-bg: #eaf0e8;
+  --color-accent-line: #bbcdb9;
+  --color-ok: #32634b;
+  --color-ok-bg: #edf5ef;
+  --color-ok-line: #b2cdb9;
+  --color-danger: #a33630;
+  --color-danger-bg: #fff0ee;
+  --color-danger-line: #e5bbb5;
+  --color-warn: #815516;
+  --color-warn-bg: #fff5e3;
+  --color-warn-line: #dfc898;
   --font-sans: "Archivo", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-
-  /* THE TYPE SCALE. Two steps only, because Tailwind's own defaults already sit
-     where this design wants them: xs 12 / sm 14 / base 16 / lg 18 / xl 20 /
-     3xl 30. These fill the two gaps, so no screen needs an arbitrary px size.
-     Landing.jsx is deliberately outside this scale — it has its own. */
-  --text-meta: 13px;                /* mono meta: breadcrumbs, dates, counts */
+  --text-meta: 13px;
   --text-meta--line-height: 1.5;
-  --text-title: 32px;               /* the one h1 on a page */
+  --text-title: 32px;
   --text-title--line-height: 1.15;
-
-  /* Named here rather than as an arbitrary value at the call site, so the one
-     place that owns the design system owns this too. Gives `animate-slide`. */
   --animate-slide: slide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
@@ -79,11 +47,20 @@
 /* Base styles, so every page does not have to repeat bg-surface font-sans.
    Theme tokens are real CSS variables, so var() works directly. */
 body {
+  color-scheme: light;
   margin: 0;
   background: var(--color-ground);
   color: var(--color-body);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+button, summary { touch-action: manipulation; }
+.skip-link { position: absolute; top: -100px; left: 16px; z-index: 100; background: white; padding: 12px; }
+.skip-link:focus { top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
 }
 
 /* A reader can be narrow even on a large screen when the course rail is wide.

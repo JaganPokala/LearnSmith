@@ -18,7 +18,7 @@ export default function Sidebar({ children, onClose }) {
     <aside className="flex h-full w-full flex-col overflow-y-auto bg-panel px-4 py-5">
       <div className="mb-6 flex items-center gap-2">
         <Link to="/" className="font-mono text-base font-bold tracking-tight text-glow">
-          text-to-learn
+          LearnSmith
         </Link>
 
         <button

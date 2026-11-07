@@ -1,0 +1,553 @@
+/* Homepage layout is scoped so later feature redesigns can happen independently. */
+.home {
+  color: var(--color-ink);
+}
+.home-container {
+  width: min(1200px, calc(100% - 64px));
+  margin-inline: auto;
+}
+.home-header {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.wordmark {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.wordmark span {
+  color: var(--color-accent);
+  margin-left: 8px;
+}
+.home nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 14px;
+}
+.home-header nav {
+  margin-left: auto;
+}
+.home a:hover {
+  color: var(--color-accent);
+}
+.home-hero {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  padding-block: 32px;
+  min-height: min(560px, calc(100svh - 76px));
+  align-items: center;
+}
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+.home h1 {
+  font-size: clamp(34px, 4vw, 56px);
+  line-height: 1.09;
+  letter-spacing: -0.055em;
+  font-weight: 600;
+  margin: 16px 0;
+}
+.home h1 em {
+  color: var(--color-accent);
+  font-style: normal;
+}
+.home-intro {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-dim);
+  max-width: 48ch;
+}
+.home-create {
+  margin-top: 0;
+  scroll-margin-top: 24px;
+}
+.home-helper {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-dim);
+  margin: 12px 0;
+}
+.home-create {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  padding: 24px;
+}
+.home-usage {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--color-dim);
+}
+.home-usage-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.home-usage-counts > span:first-child {
+  font-weight: 600;
+}
+.home-usage-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+.home-usage-status button {
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.home-usage-status button:disabled {
+  opacity: 0.6;
+}
+.home-sample {
+  scroll-margin-top: 24px;
+  border-top: 1px solid var(--color-line);
+}
+.sample-introduction {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: 48px;
+  margin-bottom: 32px;
+}
+.home .sample-introduction h2 {
+  margin-bottom: 0;
+}
+.sample-introduction .home-intro {
+  max-width: 46ch;
+}
+@media (max-width: 760px) {
+  .sample-introduction {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+.home-create details {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+.home-create h2 {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+.home-text-link {
+  display: inline-block;
+  font-size: 14px;
+  margin: 4px 20px 0 0;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.home-section {
+  padding-block: 72px;
+}
+.home h2 {
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin: 14px 0 32px;
+}
+.home h3 {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.home-steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px;
+}
+.step-number {
+  display: inline-block;
+  color: var(--color-accent);
+  border-top: 2px solid var(--color-accent-line);
+  width: 100%;
+  padding-block: 18px;
+  font-size: 14px;
+}
+.home-steps p,
+.home-features p,
+.home-plan p,
+.home-faq p {
+  color: var(--color-dim);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.home-feature-section {
+  background: #eeeee6;
+}
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.home-features article {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  padding: 28px;
+}
+.feature-mark {
+  display: block;
+  color: var(--color-accent);
+  margin-bottom: 24px;
+  font-size: 25px;
+}
+.home-plan {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  justify-content: space-between;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--color-line-strong);
+}
+.home-primary,
+.home-secondary {
+  display: inline-block;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
+}
+.home-primary {
+  color: white;
+  background: var(--color-accent);
+}
+.home a.home-primary:hover {
+  color: white;
+  background: #2b4937;
+}
+.home-secondary {
+  border: 1px solid var(--color-line-strong);
+}
+.home-faq {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 64px;
+}
+.home-faq details {
+  border-bottom: 1px solid var(--color-line);
+  padding: 20px 0;
+}
+.home summary {
+  cursor: pointer;
+}
+.home-faq summary {
+  font-size: 16px;
+  font-weight: 500;
+}
+.home-faq details p {
+  margin-top: 16px;
+}
+.home-final {
+  background: #e5ecdf;
+  border-radius: 18px;
+  text-align: center;
+  padding: 52px 24px;
+}
+.home-final h2 {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+.home-footer {
+  padding-block: 48px 28px;
+}
+.home-footer > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.home-footer > p {
+  color: var(--color-dim);
+  font-size: 12px;
+  margin-top: 28px;
+  line-height: 1.7;
+}
+.home-sign-in {
+  position: relative;
+  font-size: 14px;
+}
+.home-sign-in > div {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  width: 270px;
+  padding: 20px;
+  background: white;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  z-index: 10;
+}
+/* Preview layout: a course outline beside a readable lesson, stacked on phones. */
+.sample-card {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px #28372c06;
+}
+.sample-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 12px;
+  color: var(--color-dim);
+}
+.sample-body {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.5fr);
+}
+.sample-outline {
+  padding: 32px 24px;
+  background: #f3f5ef;
+  border-right: 1px solid var(--color-line);
+}
+.home .sample-outline h3 {
+  font-size: 24px;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  margin: 16px 0 12px;
+}
+.sample-outline > p:not(.eyebrow) {
+  color: var(--color-dim);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.sample-outline ol {
+  list-style: none;
+  margin-top: 32px;
+}
+.sample-outline li {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 16px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.sample-outline li > span {
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sample-outline small {
+  display: block;
+  color: var(--color-dim);
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+.sample-selected {
+  background: #e1e9dc;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.sample-excerpt {
+  padding: 32px 36px;
+}
+.home .sample-excerpt h3 {
+  font-size: clamp(24px, 2.7vw, 32px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  margin: 12px 0 16px;
+}
+.sample-excerpt p {
+  color: var(--color-dim);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.sample-excerpt .eyebrow {
+  font-size: 11px;
+  color: var(--color-accent);
+}
+.sample-outcomes {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+.sample-outcomes figcaption {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-dim);
+}
+.sample-outcomes ul {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 16px 0;
+}
+.sample-outcomes li {
+  text-align: center;
+  padding: 12px 4px;
+  background: var(--color-ground);
+  border-radius: 8px;
+}
+.sample-outcomes li:first-child {
+  background: var(--color-accent-bg);
+}
+.sample-outcomes span {
+  display: block;
+  color: var(--color-accent);
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sample-outcomes small {
+  display: block;
+  color: var(--color-dim);
+  font-size: 10px;
+  margin-top: 6px;
+}
+.sample-outcomes > p {
+  font-size: 13px;
+}
+.sample-note {
+  padding-top: 20px;
+  border-top: 1px solid var(--color-line);
+}
+.sample-note > p + p {
+  margin-top: 8px;
+}
+.sample-note details {
+  margin-top: 12px;
+}
+.sample-note summary {
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sample-note details p {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.sample-caption {
+  padding: 14px 28px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-dim);
+  font-size: 12px;
+  line-height: 1.65;
+}
+@media (max-width: 760px) {
+  .sample-body {
+    grid-template-columns: 1fr;
+  }
+  .sample-outline {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-line);
+    padding: 24px;
+  }
+  .sample-outline ol {
+    margin-top: 20px;
+  }
+  .sample-excerpt {
+    padding: 24px;
+  }
+  .sample-outcomes {
+    padding: 14px;
+  }
+  .sample-outcomes ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1000px) {
+  .home-hero {
+    gap: 32px;
+  }
+  .home-features {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .home-container {
+    width: calc(100% - 40px);
+  }
+  .home-header {
+    min-height: 96px;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-block: 20px;
+  }
+  .home-header nav {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    gap: 24px;
+  }
+  .home-sign-in,
+  .home-header > button,
+  .home-header > span {
+    margin-left: auto;
+  }
+  .home-hero {
+    grid-template-columns: 1fr;
+    padding-block: 20px 28px;
+    min-height: 0;
+    gap: 20px;
+  }
+  .home h1 {
+    max-width: 20ch;
+  }
+  .home-create {
+    padding: 16px;
+  }
+  .home-hero .home-helper {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-block: 8px;
+  }
+  .home-sample {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .home-hero .home-text-link {
+    margin-top: 12px;
+  }
+  .home-section {
+    padding-block: 48px;
+  }
+  .home-steps,
+  .home-features,
+  .home-faq {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .home-faq {
+    gap: 0;
+  }
+  .home-plan {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .sample-top {
+    padding-inline: 20px;
+  }
+  .home-final {
+    padding-block: 40px;
+  }
+}

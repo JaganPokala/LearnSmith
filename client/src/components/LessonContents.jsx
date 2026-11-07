@@ -32,7 +32,7 @@ export default function LessonContents({ outline }) {
     <>
       <details className="lesson-contents-mobile rounded-xl border border-line bg-panel p-4 print:hidden">
         <summary className="cursor-pointer text-sm font-medium text-ink">On this page <span className="ml-2 text-xs text-mute">{outline.length} sections</span></summary>
-        <nav aria-label="Lesson sections" className="mt-3">{links}</nav>
+        <nav aria-label="Lesson sections" className="mt-3" onClick={(event) => { if (event.target.closest('a')) event.currentTarget.closest('details').open = false; }}>{links}</nav>
       </details>
       <aside className="lesson-contents-desktop print:hidden">
         <nav aria-label="Lesson sections" className="sticky top-6 border-l border-line pl-4">

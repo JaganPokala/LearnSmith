@@ -5,6 +5,7 @@ import { useGenerateCourse } from "../hooks/useGenerateCourse.js";
 export default function PromptForm({ variant = "inline" }) {
   const [topic, setTopic] = useState("");
   const topicId = useId();
+  const Field = variant === "creation" ? "textarea" : "input";
   const { run, pending, error, reset } = useGenerateCourse();
   const navigate = useNavigate();
 
@@ -62,7 +63,8 @@ export default function PromptForm({ variant = "inline" }) {
     },
   };
 
-  const skin = SKIN[variant] ?? SKIN.inline;
+  const skin =
+    variant === "creation" ? SKIN.hero : (SKIN[variant] ?? SKIN.inline);
 
   return (
     <div>
@@ -70,22 +72,26 @@ export default function PromptForm({ variant = "inline" }) {
         htmlFor={topicId}
         className="mb-3 block text-sm font-semibold text-ink"
       >
-        What would you like to learn?
+        {variant === "creation"
+          ? "Your topic"
+          : "What would you like to learn?"}
       </label>
       <form
         onSubmit={handleSubmit}
         className={`flex w-full border ${skin.form}`}
       >
-        <input
+        <Field
           id={topicId}
-          type="text"
+          {...(variant === "creation" ? { rows: 4 } : { type: "text" })}
           value={topic}
           onChange={handleChange}
           disabled={pending}
           placeholder={
-            variant === "hero"
-              ? "For example, Python for beginners"
-              : "Name a topic — “Intro to GraphQL”, “Basics of contract law”…"
+            variant === "creation"
+              ? "I’m new to Python and want to learn to work with CSV files."
+              : variant === "hero"
+                ? "For example, Python for beginners"
+                : "Name a topic — “Intro to GraphQL”, “Basics of contract law”…"
           }
           aria-label="Course topic"
           className={`min-w-0 flex-1 bg-transparent ${skin.input}`}
@@ -103,7 +109,7 @@ export default function PromptForm({ variant = "inline" }) {
               : "Create course outline →"}
         </button>
       </form>
-      {variant === "hero" && (
+      {(variant === "hero" || variant === "creation") && (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Example topics">
           {["Python basics", "React hooks", "Personal budgeting"].map(
             (example) => (

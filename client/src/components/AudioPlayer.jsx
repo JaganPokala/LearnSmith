@@ -64,7 +64,7 @@ export default function AudioPlayer({ lessonId }) {
   }
 
   const shell = 'mb-[18px] border border-line bg-panel px-[13px] py-[11px] print:hidden';
-  const label = 'font-mono text-xs uppercase tracking-[0.13em] text-glow';
+  const label = 'text-xs font-semibold uppercase tracking-[0.1em] text-glow';
   const button = 'mt-[9px] border border-accent-line bg-accent-bg px-[13px] py-[5px] text-sm font-semibold text-glow hover:border-glow hover:bg-raised';
   const explanation = status === 'error' ? describeError(error, 'lesson') : null;
 

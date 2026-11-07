@@ -2,72 +2,45 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
-
 import AppLayout from './layouts/AppLayout.jsx';
+import PublicLayout from './layouts/PublicLayout.jsx';
 import LandingPage from './pages/Landing.jsx';
 import LibraryPage from './pages/Library.jsx';
 import CoursePage from './pages/Course.jsx';
 import NotFoundPage from './pages/NotFound.jsx';
+import { CreateCoursePage, BillingPage } from './app/learningPages.jsx';
+import { PricingPage, HelpPage } from './app/publicPages.jsx';
 import { api } from './lib/api.js';
 import AuthProvider from './components/AuthProvider.jsx';
 import UsageProvider from './components/UsageProvider.jsx';
 import LessonRoute from './components/LessonRoute.jsx';
-import BillingPage from './pages/Billing.jsx';
 
-// Render's free tier spins the API down after ~15 minutes idle, and the next
-// request pays the cold start. Firing this at module load — before React even
-// mounts — means the instance wakes while the user is reading the landing page
-// or typing a topic, instead of while they watch a spinner.
-//
-// Fire and forget, and the .catch is not optional: an unhandled rejection in
-// the console looks like a bug, and a failure here means nothing on its own.
-// The real request is what reports a genuinely unreachable server.
+// Read-only warmup while the visitor reads or types. Failures are reported by
+// the actual page request, not as an unhandled background rejection.
 api.get('/api/health').catch(() => {});
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* The provider's redirect callback uses Router navigation to restore the
-        intended app page and remove callback parameters after login. */}
     <BrowserRouter>
+      {/* Auth redirects need Router navigation; usage needs the resolved identity. */}
       <AuthProvider>
         <UsageProvider>
-        <Routes>
-          {/* 1. The landing page sits OUTSIDE the app shell — it has no sidebar.
-                 path="/" element={<LandingPage />} */}
-
-          <Route path="/" element={<LandingPage />} />
-
-          {/* 2. A route with NO path, only an element. It matches nothing by
-                 itself; its job is to wrap the three routes nested inside it so
-                 they all share AppLayout.
-
-                 <Route element={<AppLayout />}>
-                   ...the three app routes...
-                 </Route>
-
-                 This is what keeps the sidebar mounted across navigations. */}
-
-          <Route element={<AppLayout />}>
-            {/* 3. Inside that wrapper, three routes:
-                     /courses                 -> LibraryPage
-                     /courses/:courseId       -> CoursePage
-                     /lessons/:lessonId       -> LessonPage
-
-                   The :name segments become useParams() keys, so the name here
-                   must match what the page reads. :courseId here means
-                   useParams().courseId there — a typo produces `undefined` and a
-                   request to /api/courses/undefined, which 400s confusingly. */}
-
-            <Route path="/courses" element={<LibraryPage />} />
-            <Route path="/billing" element={<BillingPage />} />
-            <Route path="/courses/:courseId" element={<CoursePage />} />
-            <Route path="/lessons/:lessonId" element={<LessonRoute />} />
-          </Route>
-
-          {/* 4. A catch-all LAST: path="*" element={<NotFoundPage />}
-                 Without it an unknown URL renders a blank page with no clue. */}
-
-          <Route path="*" element={<NotFoundPage />} />
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/help" element={<HelpPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+            {/* The app shell stays mounted between learning pages. Pages supply
+                their course outline through the shared outlet context. */}
+            <Route element={<AppLayout />}>
+              <Route path="/courses" element={<LibraryPage />} />
+              <Route path="/courses/new" element={<CreateCoursePage />} />
+              <Route path="/billing" element={<BillingPage />} />
+              <Route path="/courses/:courseId" element={<CoursePage />} />
+              <Route path="/lessons/:lessonId" element={<LessonRoute />} />
+            </Route>
           </Routes>
         </UsageProvider>
       </AuthProvider>

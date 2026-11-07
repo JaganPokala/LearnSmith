@@ -44,15 +44,17 @@ export default function Sidebar({ children, onClose }) {
             ].join(' ')
           }
         >
-          My courses
+          My learning
         </NavLink>
 
-        <Link
-          to="/"
-          className="block border-l-2 border-transparent px-3 py-[7px] text-base text-dim hover:bg-raised hover:text-ink"
+        <NavLink
+          to="/courses/new"
+          className={({ isActive }) => `block border-l-2 px-3 py-[7px] text-base ${isActive ? 'border-glow bg-raised text-glow' : 'border-transparent text-dim hover:bg-raised hover:text-ink'}`}
         >
-          New course
-        </Link>
+          Create a course
+        </NavLink>
+        <Link to="/billing" className="block border-l-2 border-transparent px-3 py-[7px] text-base text-dim hover:bg-raised hover:text-ink">Plan & billing</Link>
+        <Link to="/help" className="block border-l-2 border-transparent px-3 py-[7px] text-base text-dim hover:bg-raised hover:text-ink">Help</Link>
       </nav>
 
       {children}

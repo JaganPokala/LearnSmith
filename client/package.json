@@ -13,7 +13,9 @@
     "verify:generation-watch": "node scripts/verifyGenerationWatch.js",
     "verify:learning": "node scripts/verifyLearning.js",
     "verify:sign-in": "node scripts/verifySignIn.js",
-    "verify:checkout": "node scripts/verifyCheckout.js"
+    "verify:checkout": "node scripts/verifyCheckout.js",
+    "verify:courses": "node scripts/verifyCoursePresentation.js",
+    "verify:workspace": "node scripts/verifyWorkspace.js"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.24.1",

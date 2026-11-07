@@ -1,21 +1,19 @@
-import { useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useOutletContext, Link } from 'react-router-dom';
-import { useCourse } from '../hooks/useCourse.js';
-import { timeAgo } from '../lib/formatDate.js';
-import MetaBar from '../components/MetaBar.jsx';
-import ModuleSection from '../components/ModuleSection.jsx';
-import StateMessage from '../components/StateMessage.jsx';
-import { describeError } from '../lib/errors.js';
-import RetryButton from '../components/RetryButton.jsx';
-import { useAuth } from '../lib/auth.js';
-import DeleteButton from '../components/DeleteButton.jsx';
-import { useCourseProgress } from '../hooks/useCourseProgress.js';
+import { useEffect, useMemo } from "react";
 import {
-  SidebarSection,
-  SidebarItem,
-  SidebarDot,
-  SidebarFooter,
-} from '../components/Sidebar.jsx';
+  useParams,
+  useNavigate,
+  useOutletContext,
+  Link,
+} from "react-router-dom";
+import { useCourse } from "../hooks/useCourse.js";
+import ModuleSection from "../components/ModuleSection.jsx";
+import StateMessage from "../components/StateMessage.jsx";
+import { describeError } from "../lib/errors.js";
+import RetryButton from "../components/RetryButton.jsx";
+import { useAuth } from "../lib/auth.js";
+import CourseOverview from "../features/courses/CourseOverview.jsx";
+import { useCourseProgress } from "../hooks/useCourseProgress.js";
+import CourseNavigator from "../features/courses/CourseNavigator.jsx";
 
 /**
  * GET /api/courses/:id — one course.
@@ -38,7 +36,11 @@ export default function CoursePage() {
   const { isLoading: authLoading, user } = useAuth();
 
   const { data: course, loading, error } = useCourse(courseId, !authLoading);
-  const progress = useCourseProgress(courseId, !authLoading, user?.sub ?? 'guest');
+  const progress = useCourseProgress(
+    courseId,
+    !authLoading,
+    user?.sub ?? "guest",
+  );
 
   // Every hook is declared before the early returns below: hooks must run in
   // the same order on every render, and one sitting after `if (loading) return`
@@ -60,7 +62,8 @@ export default function CoursePage() {
       moduleCount: modules.length,
       lessonCount: modules.reduce((total, m) => total + count(m), 0),
       writtenCount: modules.reduce(
-        (total, m) => total + (m.lessons?.filter((l) => l.isEnriched).length ?? 0),
+        (total, m) =>
+          total + (m.lessons?.filter((l) => l.isEnriched).length ?? 0),
         0,
       ),
       // Each module's first lesson number is one past the total of every module
@@ -68,35 +71,22 @@ export default function CoursePage() {
       // makes one syllabus read as several separate lists.
       sections: modules.map((module, i) => ({
         module,
-        startNumber: modules.slice(0, i).reduce((total, m) => total + count(m), 0) + 1,
+        startNumber:
+          modules.slice(0, i).reduce((total, m) => total + count(m), 0) + 1,
       })),
     };
   }, [course]);
 
   useEffect(() => {
     if (!course) return;
-
     setRail(
-      <>
-        {outline.sections.map(({ module }, i) => (
-          <SidebarSection key={module._id} label={`${i + 1} · ${module.title}`}>
-            {module.lessons?.map((lesson) => (
-              <SidebarItem key={lesson._id} to={`/lessons/${lesson._id}`}>
-                <SidebarDot isEnriched={lesson.isEnriched} />
-                {lesson.title}
-              </SidebarItem>
-            ))}
-          </SidebarSection>
-        ))}
-
-        <SidebarFooter>
-          {outline.lessonCount} lessons · {outline.writtenCount} written
-        </SidebarFooter>
-      </>,
+      <CourseNavigator
+        course={course}
+        completedLessonIds={progress.data?.completedLessonIds}
+      />,
     );
-
     return () => setRail(null);
-  }, [course, outline, setRail]);
+  }, [course, progress.data, setRail]);
 
   if (loading) {
     return <StateMessage kind="loading" title="Loading the course…" />;
@@ -106,14 +96,18 @@ export default function CoursePage() {
     // One shared table (lib/errors.js) rather than a local list per page: the
     // same code has to mean the same thing everywhere, and `retry` decides
     // whether a button is even honest advice.
-    const { title, detail, retry } = describeError(error, 'course');
+    const { title, detail, retry } = describeError(error, "course");
 
     return (
       <StateMessage
         kind="error"
         title={title}
         detail={detail}
-        action={retry ? <RetryButton onClick={() => window.location.reload()} /> : undefined}
+        action={
+          retry ? (
+            <RetryButton onClick={() => window.location.reload()} />
+          ) : undefined
+        }
       />
     );
   }
@@ -121,66 +115,55 @@ export default function CoursePage() {
   // Not loading, no error, still nothing: only reachable if the request
   // resolved with an empty body.
   if (!course) {
-    return <StateMessage kind="error" title="This course does not exist, or was deleted." />;
+    return (
+      <StateMessage
+        kind="error"
+        title="This course does not exist, or was deleted."
+      />
+    );
   }
 
+  const firstLesson = outline.modules.flatMap(
+    (module) => module.lessons ?? [],
+  )[0];
+  const saved = progress.data;
+
   return (
-    <>
-      <p className="mb-[9px] font-mono text-meta text-mute">
-        <Link to="/courses" className="hover:text-accent">
-          courses
-        </Link>
-        {' / '}
-        {course.title}
-      </p>
-
-      <h1 className="mb-[5px] text-title font-bold tracking-[-0.022em]">{course.title}</h1>
-
-      {course.description && (
-        <p className="mb-4 max-w-[62ch] text-base leading-[1.55] text-dim">
-          {course.description}
-        </p>
-      )}
-
-      {/* `replace: true` rather than a plain navigate: the course this URL
-          points at no longer exists, so leaving it in the history means the Back
-          button lands on a 404. */}
-      <MetaBar
-        pill={`${outline.moduleCount} modules`}
-        stats={[
-          `${outline.lessonCount} lessons`,
-          `${outline.writtenCount} written`,
-          `created ${timeAgo(course.createdAt)}`,
-        ]}
-        action={
-          <DeleteButton
-            courseId={course._id}
-            variant="page"
-            onDeleted={() => navigate('/courses', { replace: true })}
-          />
-        }
+    <div className="learning-page">
+      <Link className="learning-link" to="/courses">
+        ← My learning
+      </Link>
+      <CourseOverview
+        course={course}
+        moduleCount={outline.moduleCount}
+        lessonCount={outline.lessonCount}
+        writtenCount={outline.writtenCount}
+        progress={progress}
+        firstLesson={firstLesson}
+        onDeleted={() => navigate("/courses", { replace: true })}
       />
-
-      <section aria-label="Course progress" className="my-4 border border-line bg-panel p-4 text-sm">
-        {progress.data ? <>
-          <p className="text-ink">{progress.data.completedLessons} of {progress.data.totalLessons} lessons completed · {progress.data.percent}%</p>
-          {progress.data.resumeLesson && <Link to={`/lessons/${progress.data.resumeLesson.id}`} className="mt-2 inline-block text-glow hover:underline">Resume: {progress.data.resumeLesson.title} →</Link>}
-        </> : progress.error ? <p role="alert" className="text-danger">Progress unavailable. <button type="button" onClick={progress.refresh} className="underline">Try again</button></p> : <p className="text-mute">Loading saved progress…</p>}
-      </section>
-
+      <h2 className="course-outline-heading">Course outline</h2>
+      <p className="learning-helper">
+        Content generation and lesson completion are separate. Mark lessons
+        complete as you work through them.
+      </p>
       {outline.sections.length === 0 ? (
         <StateMessage
           kind="empty"
-          title="This course has no modules"
-          detail="The outline did not save completely. Generating the topic again is the quickest fix."
+          title="This outline has no lessons yet."
+          detail="Try reloading the course before deciding whether to create another outline."
         />
       ) : (
-        // Keyed on module._id, not the array index: keying by index makes React
-        // reuse the wrong DOM when a list reorders.
         outline.sections.map(({ module, startNumber }, i) => (
-          <ModuleSection key={module._id} number={i + 1} module={module} startNumber={startNumber} completedLessonIds={progress.data?.completedLessonIds} />
+          <ModuleSection
+            key={module._id}
+            number={i + 1}
+            module={module}
+            startNumber={startNumber}
+            completedLessonIds={saved?.completedLessonIds}
+          />
         ))
       )}
-    </>
+    </div>
   );
 }

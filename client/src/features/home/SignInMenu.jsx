@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import SignInActions from "../../components/SignInActions.jsx";
 
-export default function SignInMenu() {
+export default function SignInMenu({ returnTo = "/" }) {
   const menu = useRef(null);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function SignInMenu() {
     <details ref={menu} className="home-sign-in">
       <summary>Sign in</summary>
       <div>
-        <SignInActions returnTo="/" />
+        <SignInActions returnTo={returnTo} />
       </div>
     </details>
   );

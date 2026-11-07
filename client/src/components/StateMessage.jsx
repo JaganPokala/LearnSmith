@@ -44,7 +44,7 @@ export default function StateMessage({ kind, title, detail, progress, action }) 
   return (
     <div
       role={kind === 'error' ? 'alert' : 'status'}
-      className={`max-w-[560px] border px-6 py-[26px] text-center ${BOX[kind] ?? BOX.empty}`}
+      className={`state-message max-w-[560px] border px-6 py-[26px] text-center ${BOX[kind] ?? BOX.empty}`}
     >
       <p className={`m-0 mb-[6px] text-lg font-semibold ${HEADING[kind] ?? HEADING.empty}`}>
         {title}

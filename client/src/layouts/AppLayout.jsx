@@ -1,178 +1,147 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Outlet, useMatch } from 'react-router-dom';
-import Sidebar from '../components/Sidebar.jsx';
-import UsagePanel from '../components/UsagePanel.jsx';
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { AUTH_ENABLED, useAuth } from "../lib/auth.js";
+import SignInMenu from "../features/home/SignInMenu.jsx";
+import UsagePanel from "../components/UsagePanel.jsx";
+import AccountMenu from "../features/auth/AccountMenu.jsx";
+import "../styles/learning.css";
+import "../styles/workspace.css";
 
-/** Matches Tailwind's md. Named once so the JS and the classes cannot drift. */
-const DESKTOP = '(min-width: 768px)';
-
-/** Drag limits. Below MIN a lesson title is unreadable; above MAX the rail wins. */
-const MIN_WIDTH = 220;
-const MAX_WIDTH = 560;
-
-/**
- * The rail plus the space beside it. Wraps every page except the landing.
- *
- * Rendered ONCE and kept mounted while the URL changes — only <Outlet /> swaps.
- * A <Sidebar /> inside each page instead would remount on every navigation.
- *
- * THE RAIL SLOT
- * -------------
- * The rail's contents differ per page, but only the page knows what to put
- * there, and a page rendered inside <Outlet /> cannot reach up into its
- * parent's markup. So the layout holds the rail as state and hands the SETTER
- * down. Data still flows downward; only a function crosses the boundary.
- */
 export default function AppLayout() {
-  const isLesson = Boolean(useMatch('/lessons/:lessonId'));
+  const { pathname } = useLocation();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
   const [rail, setRail] = useState(null);
+  const drawer = useRef(null);
+  const outlineTrigger = useRef(null);
+  const previousOverflow = useRef("");
+  const modalActive = useRef(false);
+  const context = useMemo(() => ({ setRail }), []);
+  const reading = pathname.startsWith("/lessons/");
+  const coursePage =
+    /^\/courses\/[^/]+$/.test(pathname) && pathname !== "/courses/new";
+  const hasOutline = Boolean(rail && (reading || coursePage));
 
-  // Open on a desktop, closed on a phone — where the rail is a drawer OVER the
-  // page rather than a column beside it, and starting open would mean every
-  // visit begins behind a menu. Lazy initialiser: this runs once, not per render.
-  const [open, setOpen] = useState(() => window.matchMedia(DESKTOP).matches);
-
-  // Dragged width in px, or null for the responsive default. Delivered as a CSS
-  // VARIABLE rather than an inline `width`, because an inline width would also
-  // hit the phone drawer, which sizes itself from the viewport instead.
-  const [width, setWidth] = useState(null);
-
-  // The initialiser above runs ONCE, so without this the rail keeps whatever
-  // state it had when the page loaded: shrink a desktop window and the drawer
-  // stays open, covering the page it is supposed to sit beside.
-  //
-  // Subscribing to a media query is what effects are actually for — an external
-  // system pushing changes in. The state is set from the EVENT, never from the
-  // effect body, so the first render is not followed by a second one.
   useEffect(() => {
-    const query = window.matchMedia(DESKTOP);
+    document.title = `${reading ? "Lesson" : coursePage ? "Course overview" : pathname === "/courses/new" ? "Create a course" : pathname === "/billing" ? "Plan & billing" : "My learning"} — LearnSmith`;
+    window.scrollTo(0, 0);
+    drawer.current?.close();
+  }, [pathname, reading, coursePage]);
 
-    const follow = (event) => setOpen(event.matches);
-
-    query.addEventListener('change', follow);
-
-    return () => query.removeEventListener('change', follow);
-  }, []);
-
-  // Memoised with an EMPTY dependency array, and this is load-bearing.
-  // `setRail` is stable forever, but `{ setRail }` written inline in the JSX
-  // would be a new object every render — so a page effect listing the context
-  // in its deps would re-run, call setRail, re-render this layout, build
-  // another object, and run again. An infinite loop from an object literal.
-  const outletContext = useMemo(() => ({ setRail }), []);
-
-  // On a phone the drawer covers the page, so following a link inside it has to
-  // close it — otherwise you tap a lesson and go on looking at the menu.
-  //
-  // Delegated from the wrapper rather than threaded through every SidebarItem:
-  // the rail's contents are built by the PAGES, so there is no single place to
-  // attach a handler otherwise. Reacting to the click also beats reacting to a
-  // route change, which would set state during an effect on every navigation.
-  function closeIfLinkOnPhone(event) {
-    if (event.target.closest('a') && !window.matchMedia(DESKTOP).matches) setOpen(false);
+  function closeDrawer() {
+    drawer.current?.close();
+    outlineTrigger.current?.focus();
   }
-
-  // Listeners go on WINDOW, not on the handle. The pointer routinely leaves a
-  // 5px strip mid-drag — faster than the re-render — and a handler bound to the
-  // handle would stop receiving moves the moment it did, freezing the rail
-  // until you clicked again.
-  const startResize = useCallback((event) => {
-    event.preventDefault();
-
-    const move = (e) => setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, e.clientX)));
-
-    const stop = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', stop);
-      // Restored here rather than in a cleanup: without it the whole document
-      // stays unselectable for the rest of the session.
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-    };
-
-    // Dragging across text selects it, which looks broken and leaves the page
-    // highlighted when you let go.
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', stop);
-  }, []);
+  function openDrawer() {
+    previousOverflow.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    modalActive.current = true;
+    drawer.current?.showModal();
+  }
+  function restoreDrawerFocus() {
+    if (modalActive.current)
+      document.body.style.overflow = previousOverflow.current;
+    modalActive.current = false;
+    outlineTrigger.current?.focus();
+  }
+  useEffect(
+    () => () => {
+      if (modalActive.current)
+        document.body.style.overflow = previousOverflow.current;
+    },
+    [],
+  );
 
   return (
-    <div className="flex min-h-screen">
-      {/* Phone only. Catches the tap outside the drawer, which is how everyone
-          expects to dismiss one. */}
-      {open && (
-        <div
-          aria-hidden="true"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 bg-black/50 md:hidden print:hidden"
-        />
-      )}
-
-      {/* One element, two layouts: an overlay on a phone, a real column from md
-          up. The default is a quarter of the viewport, clamped — 1/4 of 2560px
-          is a 640px rail nobody wants, and 1/4 of 800px is too narrow to read a
-          lesson title.
-
-          The cap is `min(560px, 33vw)` and NOT two max-width classes. A dragged
-          width is an absolute px value, so a rail dragged to 380px keeps that
-          width as the window shrinks and ends up owning half an 800px screen —
-          the viewport term is what stops it. Written as one value because
-          `md:max-w-[560px] md:max-w-[33vw]` would be two utilities of equal
-          specificity, decided by stylesheet order rather than by intent. */}
-      <div
-        onClick={closeIfLinkOnPhone}
-        style={{ '--rail': width === null ? '25%' : `${width}px` }}
-        className={`${open ? 'block' : 'hidden'} print:!hidden fixed inset-y-0 left-0 z-40 w-[82%] max-w-[330px] md:relative md:w-[var(--rail)] md:min-w-[220px] md:max-w-[min(560px,33vw)]`}
-      >
-        <Sidebar onClose={() => setOpen(false)}>{rail}</Sidebar>
-
-        {/* The drag handle. Sits ON the seam, half its width over each side, so
-            the target is bigger than the 1px line it appears to be. Desktop
-            only: a phone has no pointer to hover it with, and the drawer is
-            sized by the viewport there anyway. */}
-        <div
-          onPointerDown={startResize}
-          onDoubleClick={() => setWidth(null)}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize the sidebar (double-click to reset)"
-          title="Drag to resize · double-click to reset"
-          className="absolute inset-y-0 -right-[3px] hidden w-[6px] cursor-col-resize bg-transparent hover:bg-accent/40 active:bg-accent/60 md:block"
-        />
-      </div>
-
-      <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 md:px-8 md:py-7">
-        {/* In the flow rather than floating over the page: a fixed button in the
-            corner sits on top of the first line of every title. Sticky so it is
-            still reachable partway down a long lesson. */}
-        {!open && (
+    <div className={`workspace ${reading ? "workspace-reading" : ""}`}>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
+      <header className="workspace-header">
+        <Link className="workspace-brand" to="/">
+          LearnSmith<span aria-hidden="true">✳</span>
+        </Link>
+        <nav
+          className="workspace-global-nav"
+          aria-label="Application navigation"
+        >
+          <NavLink to="/courses" end>
+            My learning
+          </NavLink>
+          <NavLink to="/courses/new">Create a course</NavLink>
+          <NavLink to="/billing">Plan & billing</NavLink>
+          <NavLink to="/help">Help</NavLink>
+        </nav>
+        <div className="workspace-account">
+          {isLoading ? (
+            <span role="status">Checking account…</span>
+          ) : isAuthenticated ? (
+            <AccountMenu user={user} logout={logout} />
+          ) : AUTH_ENABLED ? (
+            <SignInMenu returnTo={pathname} />
+          ) : (
+            <span>Guest</span>
+          )}
+        </div>
+      </header>
+      <div className="workspace-utility">
+        {hasOutline && (
           <button
+            ref={outlineTrigger}
             type="button"
-            onClick={() => setOpen(true)}
-            aria-label="Show the sidebar"
-            className="sticky top-3 z-20 mb-4 border border-line bg-panel px-[9px] py-[5px] font-mono text-xs text-dim hover:border-accent hover:text-accent print:hidden"
+            className="workspace-outline-trigger"
+            onClick={openDrawer}
           >
-            ›› menu
+            ☰ Course outline
           </button>
         )}
-
-        {/* Capped either way, so a row's title and its date are never 1300px
-            apart on a wide monitor. The ALIGNMENT depends on the rail:
-
-            open   → left, so the gap between the rail and the text is the
-                     <main> padding and nothing else. Centring here instead
-                     makes that gap a function of the window width and the
-                     dragged rail width, so it is different on every screen
-                     and changes as you drag.
-            closed → centred, because there is nothing to sit beside. */}
-        <div className={`print-full max-w-[1100px] ${open ? '' : 'mx-auto'}`}>
-          <div className="max-w-[720px]"><UsagePanel compact={isLesson} /></div>
-          <Outlet context={outletContext} />
+        <UsagePanel compact />
+        <Link to="/courses/new" className="workspace-create-shortcut">
+          + New course
+        </Link>
+      </div>
+      <div className={`workspace-body ${hasOutline ? "with-outline" : ""}`}>
+        {hasOutline && <aside className="workspace-rail">{rail}</aside>}
+        <main id="main-content" className="workspace-main print-full">
+          <Suspense
+            fallback={
+              <p role="status" className="py-8 text-dim">
+                Loading page…
+              </p>
+            }
+          >
+            <Outlet context={context} />
+          </Suspense>
+        </main>
+      </div>
+      {/* A native modal handles Escape, focus containment and focus return. Only
+        one outline is displayed at a time; section links use an inline disclosure. */}
+      <dialog
+        ref={drawer}
+        className="workspace-drawer"
+        aria-labelledby="outline-dialog-title"
+        onClick={(event) => {
+          if (event.target === drawer.current) closeDrawer();
+        }}
+        onClose={restoreDrawerFocus}
+      >
+        <header>
+          <h2 id="outline-dialog-title">Course outline</h2>
+          <button
+            type="button"
+            onClick={closeDrawer}
+            aria-label="Close course outline"
+          >
+            ✕
+          </button>
+        </header>
+        <div
+          onClick={(event) => {
+            if (event.target.closest("a")) drawer.current?.close();
+          }}
+        >
+          {rail}
         </div>
-      </main>
+      </dialog>
     </div>
   );
 }

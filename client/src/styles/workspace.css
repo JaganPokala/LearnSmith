@@ -1,0 +1,688 @@
+/* Global navigation is separate from the course outline: changing app pages
+   never requires opening the lesson drawer. */
+.workspace {
+  min-height: 100vh;
+  color: var(--color-ink);
+}
+.workspace-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 12px 40px;
+  background: #fcfcf9f5;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-line);
+}
+.workspace-brand {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+}
+.workspace-brand span {
+  color: var(--color-accent);
+  margin-left: 8px;
+}
+.workspace-global-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-global-nav a {
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--color-dim);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.workspace-global-nav a[aria-current="page"] {
+  color: var(--color-accent);
+  background: var(--color-accent-bg);
+  font-weight: 600;
+}
+.workspace-global-nav a:hover {
+  background: var(--color-raised);
+}
+.workspace-account {
+  margin-left: auto;
+  font-size: 13px;
+}
+.account-trigger {
+  padding: 10px;
+  cursor: pointer;
+}
+.account-popover {
+  position: fixed;
+  top: 70px;
+  right: 24px;
+  left: auto;
+  bottom: auto;
+  margin: 0;
+  width: 260px;
+  max-width: calc(100vw - 32px);
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 40px #28372c15;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+.account-popover p {
+  color: var(--color-dim);
+  overflow-wrap: anywhere;
+  margin-bottom: 12px;
+}
+.account-popover a,
+.account-popover button {
+  display: block;
+  color: var(--color-accent);
+  padding: 10px 0;
+}
+.workspace-account details {
+  position: relative;
+}
+.workspace-account summary {
+  cursor: pointer;
+  padding: 10px;
+}
+.workspace-account details > div {
+  position: absolute;
+  right: 0;
+  width: 260px;
+  max-width: calc(100vw - 32px);
+  top: 40px;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 40px #28372c15;
+}
+.workspace-account details > div p {
+  overflow-wrap: anywhere;
+  color: var(--color-dim);
+  margin-bottom: 12px;
+}
+.workspace-account details > div a,
+.workspace-account details > div button {
+  display: block;
+  padding: 10px 0;
+  color: var(--color-accent);
+}
+.workspace-utility {
+  display: flex;
+  align-items: start;
+  gap: 20px;
+  padding: 14px 40px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+.workspace-utility > details {
+  flex: 1;
+  max-width: 650px;
+  margin: 0;
+}
+.workspace-utility > details > summary {
+  border: 0;
+  padding: 4px 0;
+  border-radius: 0;
+}
+.workspace-utility > details > div {
+  position: relative;
+  z-index: 10;
+}
+.workspace-create-shortcut {
+  color: var(--color-accent);
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.workspace-body {
+  max-width: 1520px;
+  margin-inline: auto;
+}
+.workspace-body.with-outline {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.workspace-main {
+  min-width: 0;
+  padding: 40px;
+}
+.learning-heading h1, .reader-surface h1, .reader-start h1 { overflow-wrap: anywhere; }
+.workspace-main > .learning-page {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.workspace-rail {
+  position: sticky;
+  top: 76px;
+  height: calc(100svh - 76px);
+  align-self: start;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-line);
+  background: #f0f2eb;
+  padding: 28px 20px;
+}
+.workspace-label {
+  color: var(--color-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.outline-back {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--color-dim);
+  margin-bottom: 28px;
+}
+.outline-course-title {
+  display: block;
+  font-size: 19px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 10px 0 20px;
+  overflow-wrap: anywhere;
+}
+.outline-overview {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  background: white;
+  margin-bottom: 28px;
+}
+.outline-module {
+  margin-bottom: 28px;
+}
+.outline-module h2 {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.outline-module h2 > span {
+  color: var(--color-accent);
+}
+.outline-module ol {
+  list-style: none;
+}
+.outline-module a {
+  display: flex;
+  gap: 10px;
+  border-radius: 7px;
+  padding: 10px;
+  color: var(--color-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.outline-module a > span:last-child {
+  overflow-wrap: anywhere;
+}
+.outline-module a[aria-current="page"] {
+  background: #dce7d6;
+  color: #294d36;
+  font-weight: 600;
+}
+.outline-module a:hover {
+  background: #e4e9dd;
+}
+.outline-dot {
+  color: var(--color-accent);
+  width: 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding-top: 2px;
+}
+.outline-legend {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--color-dim);
+  border-top: 1px solid var(--color-line-strong);
+  padding-top: 16px;
+}
+.workspace-outline-trigger {
+  display: none;
+}
+.workspace-drawer {
+  margin: 0;
+  height: 100svh;
+  max-height: 100svh;
+  width: min(360px, 92vw);
+  max-width: 92vw;
+  padding: 0;
+  background: var(--color-ground);
+  border: 0;
+  color: var(--color-ink);
+}
+.workspace-drawer::backdrop {
+  background: #20282080;
+}
+.workspace-drawer > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-line);
+  position: sticky;
+  top: 0;
+  background: var(--color-ground);
+  z-index: 1;
+}
+.workspace-drawer > header h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.workspace-drawer > header button {
+  padding: 8px;
+}
+.workspace-drawer > div {
+  padding: 24px;
+}
+.workspace-main .course-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 24px 32px;
+  background: #e8eee1;
+  border: 0;
+  padding: 36px;
+}
+.workspace-main .course-overview h1 {
+  font-size: clamp(32px, 3.2vw, 46px);
+  max-width: 24ch;
+}
+.workspace-main .course-progress {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 24px;
+  margin: 0;
+  background: #ffffffb3;
+  border: 0;
+  border-radius: 12px;
+  border-color: #c4d1bd;
+}
+.workspace-main .course-metadata {
+  margin: 0;
+}
+.workspace-reading [id^="lesson-section-"],
+.workspace-reading #lesson-top {
+  scroll-margin-top: 100px;
+}
+.workspace-reading .lesson-contents-desktop nav {
+  top: 100px;
+}
+.workspace-main .learning-module {
+  box-shadow: 0 4px 14px #28372c03;
+}
+.workspace-main .learning-module header {
+  background: white;
+  padding: 24px;
+}
+.workspace-main .learning-lesson {
+  padding: 20px 24px;
+}
+.workspace-main .creation-page {
+  max-width: 840px;
+}
+.workspace-main .learning-course-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.workspace-main .learning-card {
+  padding: 28px;
+}
+.lesson-navigation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-line);
+}
+.lesson-navigation a {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: white;
+}
+.lesson-navigation a:last-child {
+  text-align: right;
+}
+.lesson-navigation span {
+  color: var(--color-accent);
+  font-size: 12px;
+}
+.lesson-navigation strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-top: 8px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.lesson-navigation.compact {
+  margin: 0 0 28px;
+  padding: 0 0 20px;
+  border-top: 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.lesson-navigation.compact a {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.reader-surface {
+  background: white;
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  padding: 40px;
+}
+.reader-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-accent);
+  background: var(--color-accent-bg);
+  border-radius: 20px;
+  padding: 6px 12px;
+  margin-bottom: 16px;
+}
+.lesson-reader-shell {
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.lesson-reader-header {
+  max-width: none;
+}
+.lesson-reader-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.lesson-contents-link {
+  font-size: 12px;
+}
+.lesson-reader-article > p {
+  font-size: 17px;
+  line-height: 1.9;
+}
+.lesson-completion {
+  padding: 28px;
+  border: 1px solid var(--color-accent-line);
+  border-radius: 12px;
+  background: var(--color-accent-bg);
+  margin: 36px 0 20px;
+}
+.lesson-completion button {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+  border-radius: 7px;
+}
+.reader-start {
+  padding: 40px;
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  background: white;
+}
+.reader-start h1 {
+  font-size: clamp(30px, 3vw, 44px);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin: 16px 0;
+}
+.reader-start > p {
+  color: var(--color-dim);
+  line-height: 1.75;
+  max-width: 60ch;
+}
+.reader-start .learning-button {
+  margin-top: 24px;
+}
+.billing-page {
+  max-width: 960px;
+  margin-inline: auto;
+}
+.billing-plan {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  padding: 32px;
+  background: white;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+}
+.billing-plan h2 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.billing-summary {
+  padding: 24px;
+  background: #eaf0e5;
+  border-radius: 12px;
+}
+.billing-summary h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.billing-message {
+  padding: 16px 20px;
+  border: 1px solid var(--color-line);
+  background: white;
+  border-radius: 10px;
+  margin: 20px 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0;
+}
+.billing-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.billing-limit-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-accent-line);
+  font-size: 13px;
+}
+.billing-limit-list dd {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.workspace .state-message {
+  margin-top: 24px;
+  border-radius: 14px;
+  max-width: none;
+  padding: 32px;
+  text-align: left;
+}
+.workspace .state-message > p {
+  max-width: 62ch;
+}
+.workspace .state-message button {
+  border-radius: 7px;
+}
+@media (max-width: 900px) {
+  .home-header nav a[href="/#how-it-works"] {
+    display: none;
+  }
+}
+@container lesson (min-width: 58rem) {
+  .lesson-reader-grid {
+    grid-template-columns: minmax(0, 1fr) 180px;
+    grid-template-areas: "article contents";
+  }
+  .lesson-contents-desktop {
+    display: block;
+  }
+  .lesson-contents-mobile {
+    display: none;
+  }
+}
+@media (max-width: 1200px) {
+  .workspace-main .learning-course-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-header {
+    backdrop-filter: none;
+    gap: 20px;
+    padding-inline: 24px;
+  }
+  .workspace-main {
+    padding: 28px;
+  }
+  .workspace-body.with-outline {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+  .reader-surface {
+    padding: 28px;
+  }
+}
+@media (max-width: 900px) {
+  .workspace {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  .workspace-main .course-overview {
+    display: block;
+  }
+  .workspace-main .course-progress {
+    margin-top: 24px;
+  }
+  .workspace-main .course-metadata {
+    margin-top: 20px;
+  }
+  .workspace-header {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 20px 10px;
+    position: sticky;
+  }
+  .workspace-global-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 35;
+    background: #fcfcf9;
+    border-top: 1px solid var(--color-line);
+    box-shadow: 0 -4px 20px #28372c08;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+    gap: 0;
+  }
+  .workspace-global-nav a {
+    font-size: 12px;
+    padding: 10px 6px;
+  }
+  .workspace-account {
+    margin-left: auto;
+  }
+  .workspace-utility {
+    padding: 12px 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .workspace-utility > details {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .workspace-create-shortcut {
+    font-size: 12px;
+  }
+  .workspace-outline-trigger {
+    position: fixed;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 20px;
+    z-index: 25;
+    background: var(--color-accent);
+    color: white;
+    border-radius: 24px;
+    padding: 12px 18px;
+    box-shadow: 0 6px 20px #28372c20;
+    display: block;
+    font-size: 13px;
+  }
+  .workspace-body.with-outline {
+    display: block;
+  }
+  .workspace-rail {
+    display: none;
+  }
+  .workspace-main {
+    padding: 24px 20px;
+  }
+  .billing-plan {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .workspace-main .learning-course-grid {
+    grid-template-columns: 1fr;
+  }
+  .workspace-main .learning-card,
+  .workspace-main .course-overview {
+    padding: 24px;
+  }
+  .reader-surface,
+  .reader-start {
+    padding: 24px 20px;
+  }
+  .lesson-navigation {
+    gap: 12px;
+  }
+  .lesson-navigation a {
+    padding: 16px 12px;
+  }
+  .lesson-navigation strong {
+    font-size: 13px;
+  }
+  .billing-plan {
+    padding: 24px;
+  }
+}
+@media print {
+  .workspace { padding: 0; }
+  .workspace-header,
+  .workspace-utility,
+  .workspace-rail,
+  .workspace-drawer,
+  .lesson-navigation {
+    display: none !important;
+  }
+  .workspace-body.with-outline {
+    display: block;
+  }
+  .workspace-main,
+  .reader-surface {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: white;
+  }
+  .lesson-reader-grid {
+    display: block;
+  }
+}

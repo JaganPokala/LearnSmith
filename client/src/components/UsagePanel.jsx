@@ -76,7 +76,7 @@ export default function UsagePanel({ compact = false, summaryOnly = false }) {
                 ? !data
                   ? "Account"
                   : data.tier === "pro"
-                    ? "Pro · test"
+                      ? "Pro"
                     : "Free account"
                 : "Guest"
               : "Checking account"}

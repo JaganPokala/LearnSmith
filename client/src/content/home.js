@@ -46,7 +46,7 @@ export const questions = [
   ],
   [
     "Where are guest courses saved?",
-    "Guest access depends on this browser’s guest cookie. Revisit courses through My learning in the same browser. Losing the cookie loses access. Guest courses stay separate and do not automatically transfer when you sign in.",
+    "Keep your guest course link and open it in the same browser. Access depends on this browser’s guest cookie; losing it loses access. My learning lists account courses only. Guest courses do not automatically transfer when you sign in.",
   ],
   [
     "Can I rely on every explanation?",

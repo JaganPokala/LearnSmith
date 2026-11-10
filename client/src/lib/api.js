@@ -87,6 +87,7 @@ async function request(
     timeoutMs = READ_TIMEOUT_MS,
     parse = 'json',
     skipGuestInit = false,
+    skipAuth = false,
     ...options
   } = {},
 ) {
@@ -95,7 +96,7 @@ async function request(
   }
 
   let res;
-  const token = tokenSource ? await tokenSource() : null;
+  const token = !skipAuth && tokenSource ? await tokenSource() : null;
 
   const headers = token
     ? { ...options.headers, Authorization: `Bearer ${token}` }
@@ -171,6 +172,7 @@ async function generationRequest(path, options) {
 
 export const api = {
   get: (path) => request(path),
+  getHealth: () => request('/api/health', { skipGuestInit: true, skipAuth: true }),
 
   // Content-Type only where there is a body; on GET/DELETE it just triggers
   // an unnecessary CORS preflight.

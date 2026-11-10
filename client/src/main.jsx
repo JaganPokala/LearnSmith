@@ -10,14 +10,13 @@ import CoursePage from './pages/Course.jsx';
 import NotFoundPage from './pages/NotFound.jsx';
 import { CreateCoursePage, BillingPage } from './app/learningPages.jsx';
 import { PricingPage, HelpPage } from './app/publicPages.jsx';
-import { api } from './lib/api.js';
+import { loadFeatures } from './hooks/useFeatures.js';
 import AuthProvider from './components/AuthProvider.jsx';
 import UsageProvider from './components/UsageProvider.jsx';
 import LessonRoute from './components/LessonRoute.jsx';
 
-// Read-only warmup while the visitor reads or types. Failures are reported by
-// the actual page request, not as an unhandled background rejection.
-api.get('/api/health').catch(() => {});
+// Start the shared feature check while the app mounts.
+void loadFeatures();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

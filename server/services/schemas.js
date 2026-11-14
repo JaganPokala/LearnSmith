@@ -70,8 +70,18 @@ export const courseSchema = strictObject({
   },
 });
 
-/** Passed to generateJSON as `schemaName`; appears in API error messages. */
-export const COURSE_SCHEMA_NAME = 'course_outline';
+export const COURSE_DECISION_SCHEMA_NAME = 'course_decision';
+
+export const courseDecisionSchema = strictObject({
+  status: { type: 'string', enum: ['ready', 'needs_clarification', 'rejected'] },
+  reasonCode: {
+    type: 'string',
+    enum: ['valid', 'ambiguous', 'unknown_subject', 'meaningless', 'out_of_scope', 'unsafe'],
+  },
+  course: { anyOf: [courseSchema, { type: 'null' }] },
+  message: { type: 'string' },
+  suggestions: { type: 'array', maxItems: 3, items: { type: 'string' } },
+});
 
 /**
  * One alternative in the content array, with `type` pinned to a literal. The

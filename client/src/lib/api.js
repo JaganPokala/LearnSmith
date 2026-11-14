@@ -10,11 +10,17 @@ import { generationSettled } from './generationEvents.js';
 
 /** An API failure, carrying the backend's machine-readable code. */
 export class ApiError extends Error {
-  constructor(message, { code, status }) {
+  constructor(message, { code, status, suggestions }) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    if (status === 422 && code === 'topic_needs_clarification' && Array.isArray(suggestions)) {
+      this.suggestions = suggestions
+        .filter((value) => typeof value === 'string' && value.trim() && value.trim().length <= 200)
+        .slice(0, 3)
+        .map((value) => value.trim());
+    }
   }
 }
 
@@ -149,7 +155,11 @@ async function request(
 
     throw new ApiError(
       body?.error?.message ?? `Request failed (${res.status} ${res.statusText})`,
-      { code: body?.error?.code ?? 'unknown_error', status: res.status },
+      {
+        code: body?.error?.code ?? 'unknown_error',
+        status: res.status,
+        suggestions: body?.error?.suggestions,
+      },
     );
   }
 

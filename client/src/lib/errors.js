@@ -29,6 +29,12 @@ function table(noun) {
       title: 'Daily generation limit reached',
       retry: false,
     },
+    daily_course_attempts_exceeded: { title: 'Daily course attempt limit reached', retry: false },
+    topic_needs_clarification: { title: 'Your topic needs more detail', retry: false },
+    topic_not_meaningful: { title: 'Enter a learning topic', retry: false },
+    topic_out_of_scope: { title: 'Enter a learning topic', retry: false },
+    unsafe_topic: { title: 'Choose a different topic', retry: false },
+    ai_invalid_course_decision: { title: 'Could not process your course topic', retry: true },
     burst_limit_exceeded: {
       title: 'Please slow down',
       retry: false,
@@ -184,7 +190,10 @@ export function describeError(error, noun = 'course') {
   const entry = table(noun)[error?.code];
 
   if (entry) {
-    return ['daily_quota_exceeded', 'burst_limit_exceeded'].includes(error?.code)
+    return error.code === 'topic_needs_clarification'
+      ? { ...entry, title: error.message || entry.title }
+      : ['daily_quota_exceeded', 'burst_limit_exceeded', 'daily_course_attempts_exceeded',
+        'topic_not_meaningful', 'topic_out_of_scope', 'unsafe_topic'].includes(error.code)
       ? { ...entry, detail: error.message }
       : entry;
   }

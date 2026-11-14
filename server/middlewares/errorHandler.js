@@ -18,12 +18,13 @@ export class ApiError extends Error {
    * @param {string} code        stable snake_case identifier, e.g. 'course_not_found'
    * @param {string} message     human-readable explanation
    */
-  constructor(statusCode, code, message) {
+  constructor(statusCode, code, message, { suggestions } = {}) {
     super(message);
 
     this.statusCode = statusCode;
     this.code = code;
     this.name = 'ApiError';
+    if (suggestions !== undefined) this.suggestions = suggestions;
 
     // "Anticipated and described", as opposed to a genuine bug. errorHandler
     // uses it to decide whether the message is safe to show a stranger.
@@ -130,7 +131,10 @@ export function errorHandler(err, req, res, next) {
 
   // No leading newline — trace() prefixes the request id, and a newline pushes
   // the text onto a line where nothing identifies which request it belongs to.
-  traceError(`error: ${status} ${code} - ${err.message}`);
+  const topicFeedback = status === 422 && err.isOperational === true &&
+    ['topic_needs_clarification', 'topic_not_meaningful', 'topic_out_of_scope', 'unsafe_topic'].includes(code);
+  if (topicFeedback) traceError(`error: ${status} ${code}`);
+  else traceError(`error: ${status} ${code} - ${err.message}`);
 
   // The stack only when it tells you something: ten frames of Express router
   // internals under every deliberate 400 buries the lines that matter.
@@ -139,6 +143,9 @@ export function errorHandler(err, req, res, next) {
   }
 
   const body = { error: { code, message } };
+  if (topicFeedback && Array.isArray(err.suggestions)) {
+    body.error.suggestions = err.suggestions;
+  }
 
   if (!config.isProduction) {
     body.error.stack = err.stack;

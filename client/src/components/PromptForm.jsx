@@ -34,12 +34,12 @@ export default function PromptForm({ variant = "inline" }) {
     if (course) navigate(`/courses/${course._id}`);
   }
 
-  function handleChange(e) {
-    setTopic(e.target.value);
-
+  function updateTopic(value) {
+    setTopic(value);
     if (error) reset();
   }
 
+  const clarifying = error?.code === "topic_needs_clarification";
   const SKIN = {
     inline: {
       form: "flex-col gap-2 border-line-strong bg-panel p-2 sm:flex-row sm:items-center sm:gap-3 sm:p-3",
@@ -84,7 +84,9 @@ export default function PromptForm({ variant = "inline" }) {
           id={topicId}
           {...(variant === "creation" ? { rows: 4 } : { type: "text" })}
           value={topic}
-          onChange={handleChange}
+          onChange={(event) => updateTopic(event.target.value)}
+          maxLength={200}
+          aria-describedby={error ? `${topicId}-feedback` : undefined}
           disabled={pending}
           placeholder={
             variant === "creation"
@@ -117,10 +119,7 @@ export default function PromptForm({ variant = "inline" }) {
                 key={example}
                 type="button"
                 disabled={pending}
-                onClick={() => {
-                  setTopic(example);
-                  if (error) reset();
-                }}
+                onClick={() => updateTopic(example)}
                 className="rounded-full border border-line px-3 py-2 text-xs text-dim hover:border-accent disabled:opacity-50"
               >
                 {example}
@@ -145,9 +144,33 @@ export default function PromptForm({ variant = "inline" }) {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {error.message}
-        </p>
+        <div className="mt-2">
+          <p
+            id={`${topicId}-feedback`}
+            role={clarifying ? "status" : "alert"}
+            className={clarifying ? "text-sm text-ink" : "text-sm text-danger"}
+          >
+            {error.message}
+          </p>
+          {clarifying && error.suggestions?.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested topics">
+              {[...new Set(error.suggestions)].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => {
+                    updateTopic(suggestion);
+                    document.getElementById(topicId)?.focus();
+                  }}
+                  className="rounded-full border border-line px-3 py-2 text-xs text-dim hover:border-accent disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

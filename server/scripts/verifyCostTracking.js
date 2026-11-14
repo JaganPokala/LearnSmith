@@ -9,6 +9,7 @@ import { createCourseGenerator } from '../services/courseGenerator.js';
 import { createLessonGenerator } from '../services/lessonGenerator.js';
 import { createGenerationTracker, estimateTextCost } from '../services/generationTracking.js';
 import { getUsage } from '../controllers/usageController.js';
+import { clarify, rejected as rejectedTopic } from './fixtures/courseDecisions.js';
 
 dotenv.config({ path: new URL('../../.env', import.meta.url), quiet: true });
 
@@ -34,13 +35,14 @@ const lesson = {
   ],
 };
 
-const course = {
+const courseOutline = {
   title: 'Accounting', description: 'Test provider accounting.', tags: ['testing'],
   modules: Array.from({ length: 3 }, (_, i) => ({
     title: `Module ${i + 1}`,
     lessons: Array.from({ length: 3 }, (_, j) => ({ title: `Lesson ${i + 1}.${j + 1}` })),
   })),
 };
+const course = { status: 'ready', reasonCode: 'valid', course: courseOutline, message: '', suggestions: [] };
 
 function context() {
   return { creator: OWNER, generationId: randomUUID() };
@@ -151,6 +153,18 @@ async function verify() {
     assert.equal((await rows(courseContext))[0].validationStatus, 'accepted');
     assert.equal((await rows(courseContext))[0].operation, 'course');
     console.log('PASS: Course generation records its owner, grouping ID, and validation result.');
+
+    for (const decision of [clarify, rejectedTopic]) {
+      const decisionContext = context();
+      const fakeDecision = provider([response(JSON.stringify(decision))], tracker);
+      await createCourseGenerator({ generate: fakeDecision.generate, tracker })('Topic check', decisionContext);
+      assert.equal(fakeDecision.calls(), 1);
+      const [record] = await rows(decisionContext);
+      assert.equal(record.validationStatus, 'accepted');
+      assert.equal(record.outcome, 'response_received');
+      assert.equal(record.estimatedCostUsd, 0.00108);
+    }
+    console.log('PASS: Clarifications and rejections retain their provider usage and cost.');
 
     const cutContext = context();
     const truncated = provider([

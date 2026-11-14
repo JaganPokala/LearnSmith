@@ -1,4 +1,5 @@
 export const PRO_DAILY_LIMITS = Object.freeze({ courses: 10, lessons: 50, audio: 20 });
+export const DAILY_COURSE_ATTEMPT_LIMITS = Object.freeze({ guest: 10, free: 20, pro: 50 });
 
 const LIMITS = {
   guest: Object.freeze({

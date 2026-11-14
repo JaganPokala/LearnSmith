@@ -21,6 +21,17 @@ const dailyUsageSchema = new mongoose.Schema(
       min: 0,
       validate: Number.isInteger,
     },
+    courseAttempts: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      validate: Number.isInteger,
+    },
+    courseReservationIds: {
+      type: [String],
+      default: [],
+    },
 
     audio: {
       type: Number,

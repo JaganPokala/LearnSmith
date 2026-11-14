@@ -27,7 +27,9 @@ and persistent app navigation.
 
 ## How it works
 
-1. Enter a topic and create a **course outline** containing modules and lesson titles.
+1. Enter a specific learning topic. The app creates a **course outline** with modules
+   and lesson titles, or asks you to clarify the topic. You can edit a suggested
+   topic before submitting it again.
 2. Choose a lesson and explicitly select **Generate lesson**. Opening a lesson
    alone does not start paid generation.
 3. Read the saved lesson, answer practice questions, and mark it complete when ready.
@@ -38,6 +40,17 @@ Guest courses require their saved link and the same browser's signed guest cooki
 My learning lists account courses only. Guest records do not transfer on sign-in;
 losing the guest cookie loses access to those records. Continue restores the
 last-opened lesson, not a scroll position. Quiz results do not mark lessons complete.
+
+One AI request normally checks the topic and generates the outline. An ambiguous
+topic gets a question you can answer by editing and submitting again. A rejected
+topic gets guidance for choosing another subject. These decisions create no saved
+course and release the reserved course credit when settlement succeeds.
+
+The daily attempt limits are 10 for guests, 20 for free accounts, and 50 for Pro.
+They reset at midnight UTC and include admitted requests that ask for clarification
+or reject the topic. A repair retry counts under the original attempt. Provider,
+validation, and save failures keep the reserved credit. A crash or failed
+settlement can also leave the credit consumed for that UTC day.
 
 ## Stack and structure
 
@@ -204,11 +217,11 @@ after changing its environment file.
 The configured Pro plan is **INR 50/month**, with up to **12 monthly billing cycles**.
 Current daily allowances are:
 
-| Identity | Course outlines | Lesson generations | Narrations |
-| --- | ---: | ---: | ---: |
-| Guest | 1 | 5 | 2 |
-| Free account | 3 | 20 | 10 |
-| Pro account | 10 | 50 | 20 |
+| Identity | Course outlines | Course attempts | Lesson generations | Narrations |
+| --- | ---: | ---: | ---: | ---: |
+| Guest | 1 | 10 | 5 | 2 |
+| Free account | 3 | 20 | 20 | 10 |
+| Pro account | 10 | 50 | 50 | 20 |
 
 Allowances reset at midnight UTC and do not accumulate. Upgrading keeps today's
 usage. Prices and limits shown in the application come from the server.
@@ -244,6 +257,9 @@ The API runs at `http://localhost:5000`. These are the main route groups:
 
 Generation is always an explicit POST. Reads do not initiate AI work. Account
 routes use bearer tokens; guest-accessible resources still require their owner cookie.
+For course generation, a created outline returns `201`. Topics that need
+clarification or cannot be taught return `422` with a message; clarification may
+include suggested topics. Hitting a course or attempt limit returns `429`.
 
 ## Verification
 
@@ -254,6 +270,7 @@ npm run build
 npm run lint
 npm run verify:workspace
 npm run verify:courses
+npm run verify:course-admission
 npm run verify:usage
 npm run verify:reader
 npm run verify:generation-watch
@@ -268,6 +285,9 @@ testing live authentication and persistence.
 
 Backend checks are listed by `npm run` in `server/`. They cover generation claims,
 quotas, accounting, burst limits, audio, learning, course context and billing.
+Course topic checks are `verify:course-decisions`, `verify:course-controller`, and
+`verify:course-admission` (MongoDB). The labeled topic fixture is separate from
+these checks and does not run against a provider.
 Database integration checks require `TEST_MONGO_URI` and select the separate
 `learnsmith_generation_test` database. They create and clean up temporary records;
 use a test connection, not production credentials. Provider-dependent checks use

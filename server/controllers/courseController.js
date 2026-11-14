@@ -7,12 +7,12 @@ import Course from '../models/Course.js';
 import { randomUUID } from 'node:crypto';
 import Lesson from '../models/Lesson.js';
 import LessonProgress from '../models/LessonProgress.js';
-import { generateCourse } from '../services/courseGenerator.js';
+import { generateCourse, validateCourseDecision } from '../services/courseGenerator.js';
 import { saveCourseTree, deleteCourseTree } from '../services/courseService.js';
 import { creatorOf } from '../middlewares/auth.js';
 import { ApiError } from '../middlewares/errorHandler.js';
-import { trace } from '../middlewares/trace.js';
-import { consumeDailyQuota } from '../services/usageService.js';
+import { trace, traceError } from '../middlewares/trace.js';
+import { reserveCourseAttempt, settleCourseAttempt } from '../services/courseAdmission.js';
 
 /**
  * Every course belongs to this one shared owner until Auth0 lands in Phase 8,
@@ -27,10 +27,6 @@ const LIST_LIMIT = 50;
 
 /**
  * Validate the incoming prompt and return the cleaned topic.
- *
- * Measured: an empty topic does not fail, the model INVENTS one. Nothing in
- * this pipeline can answer "I do not know", so anything not rejected here comes
- * back as a confident course the user never asked for.
  *
  * @param {unknown} body  req.body — clients send anything
  * @returns {string} the trimmed topic
@@ -69,12 +65,25 @@ function readTopic(body) {
     );
   }
 
-  return topic;
+  if (!/[\p{L}\p{N}]/u.test(topic)) {
+    throw new ApiError(400, 'topic_not_meaningful', 'Enter a learning topic, such as “Python for beginners”.');
+  }
+
+  return topic.replace(/\s+/g, ' ');
 }
+
+const TOPIC_ERROR_CODES = {
+  ambiguous: 'topic_needs_clarification',
+  unknown_subject: 'topic_needs_clarification',
+  meaningless: 'topic_not_meaningful',
+  out_of_scope: 'topic_out_of_scope',
+  unsafe: 'unsafe_topic',
+};
 
 export function createCourseHandler({
   generate = generateCourse,
-  consumeQuota = consumeDailyQuota,
+  reserve = reserveCourseAttempt,
+  settle = settleCourseAttempt,
   save = saveCourseTree,
 } = {}) {
   return async function createCourse(req, res) {
@@ -82,25 +91,33 @@ export function createCourseHandler({
 
     const topic = readTopic(req.body);
     const creator = creatorOf(req);
+    const generationId = randomUUID();
+    const reservation = await reserve({ creator, identityType: req.identityType, generationId });
 
-    await consumeQuota({
-      creator,
-      identityType: req.identityType,
-      resource: 'courses',
-    });
+    let refundCourse = false;
+    let saved;
+    try {
+      const { attempts, ms, ...decision } = await generate(topic, { creator, generationId });
+      if (validateCourseDecision(decision).length) {
+        throw new ApiError(502, 'ai_invalid_course_decision', 'The model could not return a valid course decision. Try again.');
+      }
+      if (decision.status !== 'ready') {
+        refundCourse = true;
+        throw new ApiError(422, TOPIC_ERROR_CODES[decision.reasonCode], decision.message, {
+          suggestions: decision.suggestions,
+        });
+      }
 
-    const { course, attempts, ms } = await generate(topic, {
-      creator,
-      generationId: randomUUID(),
-    });
-    const saved = await save(course, creator);
-
-    const totalMs = Math.round(performance.now() - startedAt);
-
-    trace(
-      `POST /api/courses/generate attempts=${attempts} ` +
-      `generate=${ms}ms total=${totalMs}ms`,
-    );
+      saved = await save(decision.course, creator);
+      const totalMs = Math.round(performance.now() - startedAt);
+      trace(`POST /api/courses/generate attempts=${attempts} generate=${ms}ms total=${totalMs}ms`);
+    } finally {
+      try {
+        await settle(reservation, { refundCourse });
+      } catch (err) {
+        traceError('course_admission_settlement_failed', { generationId, refundCourse, code: err.code });
+      }
+    }
 
     return res.status(201).json(saved);
   };

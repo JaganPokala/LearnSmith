@@ -25,40 +25,7 @@ export async function consumeDailyQuota({
   const resetAt = new Date(`${day}T00:00:00.000Z`);
   resetAt.setUTCDate(resetAt.getUTCDate() + 1);
 
-  // With the current default index configuration, this waits
-  // for the model's indexes, including creator + day uniqueness.
-  await DailyUsage.init();
-
-  // Step 1: Ensure today's usage document exists.
-  try {
-    await DailyUsage.updateOne(
-      { creator, day },
-      {
-        $setOnInsert: {
-          creator,
-          day,
-          courses: 0,
-          lessons: 0,
-          audio: 0,
-        },
-      },
-      {
-        upsert: true,
-        runValidators: true,
-      },
-    );
-  } catch (err) {
-    // Two requests may try to create today's record together.
-    // Ignore only the expected creator + day uniqueness conflict.
-    const sameDailyRecord =
-      err.code === 11000 &&
-      err.keyPattern?.creator === 1 &&
-      err.keyPattern?.day === 1;
-
-    if (!sameDailyRecord) {
-      throw err;
-    }
-  }
+  await ensureDailyUsage({ creator, day });
 
   // Step 2: Atomically check the limit AND consume one allowance.
   const usage = await DailyUsage.findOneAndUpdate(
@@ -95,4 +62,20 @@ export async function consumeDailyQuota({
     remaining: limit - usage[resource],
     resetAt: resetAt.toISOString(),
   };
+}
+
+export async function ensureDailyUsage({ creator, day }, UsageModel = DailyUsage) {
+  await UsageModel.init();
+  try {
+    await UsageModel.updateOne(
+      { creator, day },
+      { $setOnInsert: { creator, day, courses: 0, lessons: 0, audio: 0 } },
+      { upsert: true, runValidators: true },
+    );
+  } catch (err) {
+    // Concurrent requests may both try to create the same daily record.
+    if (err.code !== 11000 || err.keyPattern?.creator !== 1 || err.keyPattern?.day !== 1) {
+      throw err;
+    }
+  }
 }

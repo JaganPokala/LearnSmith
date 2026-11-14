@@ -9,8 +9,7 @@
 
 import { generateJSON } from './openai.js';
 import { courseMessages } from './prompts.js';
-import { courseSchema, COURSE_SCHEMA_NAME } from './schemas.js';
-import { parseAIJson } from '../utils/parseAIJson.js';
+import { courseDecisionSchema, COURSE_DECISION_SCHEMA_NAME } from './schemas.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { trace, traceError } from '../middlewares/trace.js';
 import { generationTracker } from './generationTracking.js';
@@ -23,6 +22,11 @@ const LESSONS_MAX = 5;
 
 /** A "tag" longer than this, or containing a comma, is not a tag. */
 const MAX_TAG_LENGTH = 30;
+
+function hasExactKeys(value, keys) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
 
 /**
  * Check a parsed course against what the schema cannot express.
@@ -38,6 +42,11 @@ export function validateCourse(course) {
   // Collect ALL violations, never return on the first. One retry carrying three
   // corrections beats three round trips at ~5s each.
   const problems = [];
+
+  if (!hasExactKeys(course, ['title', 'description', 'tags', 'modules'])) {
+    return ['the course must have exactly title, description, tags, and modules'];
+  }
+  if (typeof course.description !== 'string') problems.push('the description must be a string');
 
   // Strict mode has no optional fields, so the key always exists — an empty
   // string is the realistic failure, not a missing key.
@@ -61,6 +70,11 @@ export function validateCourse(course) {
   course.modules.forEach((module, i) => {
     const where = `module ${i + 1}`;
 
+    if (!hasExactKeys(module, ['title', 'lessons'])) {
+      problems.push(`${where} must have exactly title and lessons`);
+      return;
+    }
+
     if (typeof module?.title !== 'string' || module.title.trim() === '') {
       problems.push(`${where} has an empty title`);
     }
@@ -77,8 +91,8 @@ export function validateCourse(course) {
     }
 
     module.lessons.forEach((lesson, j) => {
-      if (typeof lesson?.title !== 'string' || lesson.title.trim() === '') {
-        problems.push(`lesson ${j + 1} of ${where} has an empty title`);
+      if (!hasExactKeys(lesson, ['title']) || typeof lesson.title !== 'string' || !lesson.title.trim()) {
+        problems.push(`lesson ${j + 1} of ${where} must have only a nonempty title`);
       }
     });
   });
@@ -86,7 +100,9 @@ export function validateCourse(course) {
   // The schema caps the tag COUNT at 5, and the model answered that pressure by
   // cramming fourteen comma-separated tags into the fifth string. Structure
   // satisfied, content not — so check the values, and a comma is the tell.
-  if (Array.isArray(course.tags)) {
+  if (!Array.isArray(course.tags) || course.tags.length > 5) {
+    problems.push('tags must be a list of at most five strings');
+  } else {
     course.tags.forEach((tag, i) => {
       const where = `tag ${i + 1}`;
 
@@ -97,13 +113,13 @@ export function validateCourse(course) {
 
       if (tag.length > MAX_TAG_LENGTH) {
         problems.push(
-          `${where} is ${tag.length} characters long ("${tag.slice(0, 40)}...") - a tag must be at most ${MAX_TAG_LENGTH}`
+          `${where} must be at most ${MAX_TAG_LENGTH} characters`
         );
       }
 
       if (tag.includes(',')) {
         problems.push(
-          `${where} ("${tag}") is a comma-separated list - each tag must name one topic on its own`
+          `${where} is a comma-separated list - each tag must name one topic on its own`
         );
       }
     });
@@ -120,22 +136,60 @@ export function validateCourse(course) {
     const key = module.title.trim().toLowerCase();
     if (key === '') continue;
 
-    if (seen.has(key)) duplicated.add(module.title.trim());
+    if (seen.has(key)) duplicated.add(key);
     seen.add(key);
   }
 
-  for (const title of duplicated) {
-    problems.push(`two modules are both titled "${title}" - each module must cover a different part of the topic`);
+  if (duplicated.size) {
+    problems.push('each module must have a distinct title and cover a different part of the topic');
   }
 
   return problems;
+}
+
+const DECISION_REASONS = {
+  ready: ['valid'],
+  needs_clarification: ['ambiguous', 'unknown_subject'],
+  rejected: ['meaningless', 'out_of_scope', 'unsafe'],
+};
+
+export function validateCourseDecision(decision) {
+  if (!hasExactKeys(decision, courseDecisionSchema.required)) {
+    return ['return exactly status, reasonCode, course, message, and suggestions'];
+  }
+
+  const { status, reasonCode, course, message, suggestions } = decision;
+  if (typeof status !== 'string' || !Object.hasOwn(DECISION_REASONS, status) ||
+      !DECISION_REASONS[status].includes(reasonCode)) {
+    return ['use a recognized status and a matching reasonCode'];
+  }
+  if (typeof message !== 'string' || !Array.isArray(suggestions)) {
+    return ['use a string message and a list of suggestions'];
+  }
+  if (status === 'ready') {
+    if (message !== '' || suggestions.length || !course || typeof course !== 'object' || Array.isArray(course)) {
+      return ['ready requires a course, an empty message and no suggestions'];
+    }
+    return validateCourse(course);
+  }
+  if (course !== null || !message.trim() || message.trim().length > 240) {
+    return ['a non-ready decision requires a null course and a message of 1–240 characters'];
+  }
+  if (status === 'rejected' && suggestions.length) {
+    return ['a rejected decision must have no suggestions'];
+  }
+  if (suggestions.length > 3 || suggestions.some((value) =>
+    typeof value !== 'string' || !value.trim() || value.trim().length > 200)) {
+    return ['return at most three standalone suggestions of 1–200 characters each'];
+  }
+  return [];
 }
 
 /**
  * Generate a validated course outline.
  *
  * @param {string} topic  already validated by the HTTP layer
- * @returns {Promise<{ course: object, attempts: number, ms: number }>}
+ * @returns {Promise<object>} validated decision with attempt count and duration
  * @throws {ApiError} when both attempts fail
  */
 export function createCourseGenerator({
@@ -154,75 +208,53 @@ export function createCourseGenerator({
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const tracking = { ...context, operation: 'course', attemptNumber: attempt };
-      // The catch wraps the whole attempt: an upstream failure and a bad response
-      // both mean "this attempt failed", and both deserve attempt 2.
+      let decision;
       try {
         const { text } = await generate({
           messages: courseMessages(topic, feedback),
-          schema: courseSchema,
-          schemaName: COURSE_SCHEMA_NAME,
+          schema: courseDecisionSchema,
+          schemaName: COURSE_DECISION_SCHEMA_NAME,
           tracking,
         });
 
-        // The context is what makes a production log line say WHICH generation died.
-        const course = parseAIJson(text, { topic, attempt });
-
-        const problems = validateCourse(course);
-
-        if (problems.length === 0) {
-          await tracker.validation(tracking, 'accepted');
-          const ms = Math.round(performance.now() - startedAt);
-
-          trace(
-            `  generator: "${topic}" ok on attempt ${attempt}, ${ms}ms, ${course.modules.length} modules`
-          );
-
-          return { course, attempts: attempt, ms };
+        try {
+          decision = JSON.parse(text);
+        } catch {
+          throw new ApiError(502, 'ai_unparseable', 'The model returned unreadable JSON. Try again.');
         }
-
-        // Logged either way: if a retry silently fixes a recurring problem you
-        // never learn the prompt has a systematic flaw.
-        traceError(
-          `  generator: "${topic}" attempt ${attempt} invalid - ${problems.length} violation(s): ${problems.join('; ')}`
-        );
-
-        if (attempt === MAX_ATTEMPTS) {
-          throw new ApiError(
-            502,
-            'ai_invalid_course',
-            `The model could not produce a valid course for "${topic}" in ${MAX_ATTEMPTS} attempts: ${problems.join('; ')}`
-          );
-        }
-
-        feedback = problems.join('; ');
-        await tracker.validation(tracking, 'rejected', 'ai_invalid_course');
       } catch (err) {
-        if (['tracking_unavailable', 'tracking_context_invalid'].includes(err.code)) throw err;
-        // Our own verdict from above, not a failure to classify. Let it out.
-        if (err.code === 'ai_invalid_course') {
-          await tracker.validation(tracking, 'rejected', err.code);
-          throw err;
-        }
-        if (['ai_unparseable', 'ai_truncated', 'ai_empty'].includes(err.code)) {
+        const contentError = ['ai_unparseable', 'ai_truncated', 'ai_empty'].includes(err.code);
+        if (contentError) {
           await tracker.validation(tracking, 'rejected', err.code);
         }
-
-        // Both retry, but a log that merges them makes the upstream-failure rate
-        // unmeasurable.
-        const upstream = err.code === 'ai_unavailable';
-
-        traceError(
-          `  generator: "${topic}" attempt ${attempt} failed (${upstream ? 'upstream' : 'content'}, ${err.code ?? 'no code'}): ${err.message}`
-        );
-
-        if (attempt === MAX_ATTEMPTS) throw err;
-
-        // Feedback only for CONTENT failures — telling the model to fix a network
-        // timeout is nonsense and wastes prompt tokens.
-        feedback = upstream
-          ? undefined
-          : `The previous attempt could not be read as a course: ${err.message}`;
+        traceError('course_generation_failed', { generationId: tracking.generationId, attempt, code: err.code });
+        if (attempt === MAX_ATTEMPTS || (!contentError && err.code !== 'ai_unavailable')) throw err;
+        feedback = contentError ? 'Return one complete JSON decision.' : undefined;
+        continue;
       }
+
+      const problems = validateCourseDecision(decision);
+      if (problems.length) {
+        const code = 'ai_invalid_course_decision';
+        await tracker.validation(tracking, 'rejected', code);
+        traceError('course_generation_failed', { generationId: tracking.generationId, attempt, code });
+        if (attempt === MAX_ATTEMPTS) {
+          throw new ApiError(502, code, 'The model could not return a valid course decision. Try again.');
+        }
+        feedback = problems.join('; ');
+        continue;
+      }
+
+      await tracker.validation(tracking, 'accepted');
+      const { status, reasonCode, message, suggestions } = decision;
+      trace('course_decision', { generationId: tracking.generationId, attempt, status, reasonCode });
+      return {
+        ...decision,
+        message: message.trim(),
+        suggestions: suggestions.map((value) => value.trim()),
+        attempts: attempt,
+        ms: Math.round(performance.now() - startedAt),
+      };
     }
   };
 }

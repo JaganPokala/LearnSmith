@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "verify:usage": "node scripts/verifyUsage.js",
+    "verify:course-admission": "node scripts/verifyCourseAdmission.js",
     "verify:reader": "node scripts/verifyReader.js",
     "verify:generation-watch": "node scripts/verifyGenerationWatch.js",
     "verify:learning": "node scripts/verifyLearning.js",

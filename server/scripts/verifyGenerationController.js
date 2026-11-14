@@ -10,7 +10,8 @@ import Module from '../models/Module.js';
 import Lesson from '../models/Lesson.js';
 import DailyUsage from '../models/DailyUsage.js';
 import { createCourseHandler } from '../controllers/courseController.js';
-import { consumeDailyQuota } from '../services/usageService.js';
+import { reserveCourseAttempt } from '../services/courseAdmission.js';
+import { ready } from './fixtures/courseDecisions.js';
 
 import {
   createGenerateLessonContent,
@@ -201,16 +202,14 @@ async function verify() {
         assert.equal(tracking.creator, OWNER);
         assert.match(tracking.generationId, /^[0-9a-f-]{36}$/);
         courseGeneratorCalls += 1;
-        return { course: { title: 'Fake outline', modules: [] }, attempts: 1, ms: 0 };
+        return { ...ready, attempts: 1, ms: 0 };
       },
-      consumeQuota: async (args) => {
+      reserve: async (args) => {
         courseQuotaCalls += 1;
-        assert.deepEqual(args, {
-          creator: OWNER,
-          identityType: 'user',
-          resource: 'courses',
-        });
-        return consumeDailyQuota(args);
+        assert.equal(args.creator, OWNER);
+        assert.equal(args.identityType, 'user');
+        assert.match(args.generationId, /^[0-9a-f-]{36}$/);
+        return reserveCourseAttempt(args);
       },
       save: async (course, creator) => {
         courseSaveCalls += 1;
